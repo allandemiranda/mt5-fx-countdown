@@ -1,0 +1,97 @@
+{
+  "permissions": {
+    "auto_approve_edits": true,
+    "auto_approve_commands": true,
+    "deny": [
+      "command(git commit*)",
+      "command(git push*)",
+      "command(git pull*)",
+      "command(git checkout [^-]*)",
+      "command(git switch*)",
+      "command(git branch*)",
+      "command(git merge*)",
+      "command(git rebase*)",
+      "command(git reset --hard*)",
+      "command(git cherry-pick*)",
+      "command(git tag*)",
+      "command(git clean*)",
+      "command(git rm*)",
+      "command(rm *)",
+      "command(rm -*)",
+      "command(rmdir *)",
+      "command(del *)",
+      "command(erase *)",
+      "command(rd *)",
+      "command(Remove-Item *)",
+      "command(ri *)"
+    ],
+    "allow": [
+      "edit(*)",
+      "write_file(*)",
+      "replace_file_content(*)",
+      "write_to_file(*)",
+      "command(*)"
+    ]
+  },
+  "mcpServers": {
+    "duckdb": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "mcp<2",
+        "mcp-server-duckdb",
+        "--db-path",
+        "quant_analytics.duckdb"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "duckduckgo-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "duckduckgo-mcp-server"
+      ]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-fetch"
+      ]
+    },
+    "economic-calendar": {
+      "command": "python",
+      "args": [
+        "-m",
+        "src.tools.macro_calendar",
+        "--mcp"
+      ]
+    },
+    "mt5-local": {
+      "command": "python",
+      "args": [
+        "-m",
+        "src.tools.mt5_mcp_server",
+        "--mcp"
+      ]
+    }
+  },
+  "customizations": {
+    "rules": [
+      "AGENTS.md"
+    ],
+    "skills": {
+      "entries": [
+        {
+          "path": ".agents/skills"
+        }
+      ]
+    }
+  }
+}

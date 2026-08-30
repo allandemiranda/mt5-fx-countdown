@@ -1,0 +1,51 @@
+{
+  "mcpServers": {
+    "duckdb": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "mcp<2",
+        "mcp-server-duckdb",
+        "--db-path",
+        "quant_analytics.duckdb"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "duckduckgo-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "duckduckgo-mcp-server"
+      ]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-fetch"
+      ]
+    },
+    "economic-calendar": {
+      "command": "python",
+      "args": [
+        "-m",
+        "src.tools.macro_calendar",
+        "--mcp"
+      ]
+    },
+    "mt5-local": {
+      "command": "python",
+      "args": [
+        "-m",
+        "src.tools.mt5_mcp_server",
+        "--mcp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+MetaTrader5==5.0.6147
+xgboost==3.4.1
+onnxmltools==1.16.0
+onnx==1.22.0
+onnxruntime==1.29.0
+scikit-learn==1.9.0
+pandas==3.0.5
+numpy==2.5.2
+python-dotenv==1.2.3
+pytest==9.1.1
+optuna==3.6.1
+joblib==1.4.2
+flake8==7.3.0
