@@ -13,6 +13,10 @@ Given a target trading symbol (e.g. `EURUSD`) and a time window (e.g. from curre
 3. Filter and reason about high-impact volatility catalysts for the symbol's base and quote currencies.
 4. Insert new events, update existing ones, or purge expired past events.
 
+> [!TIP]
+> For historical backtest simulations (e.g. 2025-01-01 to 2026-09-01), use the batch tool:
+> `python macro_agent/tools/generate_calendar_dataset.py` to populate ex-ante records into `macro_governance.db`.
+
 ---
 
 ## 2. Step-by-Step Instructions for the AI CLI Agent

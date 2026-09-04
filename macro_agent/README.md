@@ -27,6 +27,9 @@ macro_agent/
 ├── README.md                      # This boundary and operational guide
 ├── db_client.py                   # Python SQLite manager for macro_governance.db
 ├── fetcher.py                     # Collector for economic calendar feeds & news headlines
+├── tools/
+│   ├── README.md                  # Documentation for batch tools and dataset generators
+│   └── generate_calendar_dataset.py # Ex-ante institutional calendar dataset generator
 └── prompts/
     ├── UPDATE_ECONOMIC_CALENDAR.md # CLI Agent runbook for calendar event evaluation
     └── UPDATE_NEWS_GOVERNANCE.md   # CLI Agent runbook for breaking news blacklist evaluation
@@ -115,3 +118,40 @@ To guarantee database integrity and prevent accidental corruption or incomplete 
    # Restore from a specific backup
    python macro_agent/db_client.py restore --file path/to/backup.bkp
    ```
+
+---
+
+## 7. Economic Calendar Data Sources & APIs
+
+When compiling or updating scheduled macroeconomic calendar events, the system references institutional data sources and specialized financial APIs:
+
+1. **MetaTrader 5 Native MQL5 Calendar API (`CalendarValueHistory`)**:
+   * **Endpoint/Scope**: Built directly into the MetaTrader 5 terminal platform ([MQL5 Economic Calendar](https://www.mql5.com/en/economic-calendar)), indexing over 900 macroeconomic indicators across major currency jurisdictions.
+   * **MQL5 Functions**: `CalendarValueHistory(values, datetime_from, datetime_to, NULL, currency)`, `CalendarEventById()`.
+   * **Limitation**: Available during live terminal sessions, but natively disabled/empty during Strategy Tester backtests, requiring offline relational ingestion into `macro_governance.db`.
+2. **Forex Factory Feeds & Historical Archives**:
+   * **Live Weekly Feed**: `https://nfs.faireconomy.media/ff_calendar_thisweek.json` (delivers event name, country, date, impact, forecast, and previous values).
+   * **Historical Archives**: Community-maintained datasets (e.g. Hugging Face `Ehsanrs2/Forex_Factory_Calendar` and GitHub scrapers) for historical consensus expectations.
+3. **External Financial Data APIs & Python Toolkits**:
+   * **Investing.com Economic Calendar**: Global economic indicators with real-time consensus forecasts and historical release time-series.
+   * **Finnhub & EODHD APIs**: RESTful JSON endpoints providing structured macroeconomic event calendars with historical revisions.
+   * **TradingEconomics & OpenBB SDK**: Standardized quantitative wrappers (`obb.economy.calendar`) for cross-country macroeconomic modeling.
+
+---
+
+## 8. Batch Calendar Dataset Generation (`tools/generate_calendar_dataset.py`)
+
+### Why This Tool Exists
+Because MT5 Strategy Tester cannot query MetaQuotes' built-in calendar servers during backtesting, this batch generator synthesizes an institutional, ex-ante historical calendar for the 8 major currencies (**EUR, USD, JPY, GBP, AUD, CAD, CHF, NZD**) from **2025-01-01 to 2026-09-01**:
+* **Strict Ex-Ante Formulation**: Records contain only prior readings and pre-release consensus forecasts (zero lookahead bias).
+* **Defensive Action Calibration**: Categorizes events ex-ante into `TRAILING_STOP` (120 pts for central banks), `BREAKEVEN` (for NFP), `BLOCK_ENTRIES` (for CPI/PCE/GDP), and `ADVISORY_ONLY` (for PMIs/surveys).
+* **Zero News Pollution**: Creates the `news_events` table and leaves it strictly empty (0 records), ensuring Strategy Tester parity.
+
+### How to Run:
+```powershell
+# Default run (populates %APPDATA%\MetaQuotes\Terminal\Common\Files\macro_governance.db)
+python macro_agent/tools/generate_calendar_dataset.py
+
+# Custom date range or SQLite database destination
+python macro_agent/tools/generate_calendar_dataset.py --start 2025-01-01 --end 2026-09-01 --db-path "path/to/custom.db"
+```
