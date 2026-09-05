@@ -179,10 +179,31 @@ public:
       double slPrice    = m_activePositions[posIdx].slPrice;
       ENUM_POSITION_TYPE pType = m_activePositions[posIdx].posType;
       
-      // Golden Rule: Calculate net liquid profit (Profit + Swap + Commission)
-      double netLiquidProfit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT) + 
-                               HistoryDealGetDouble(dealTicket, DEAL_SWAP) + 
-                               HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      // Golden Rule: Calculate net liquid profit (Profit + Swap + Commission) across all deals for positionId
+      double totalProfit = 0.0;
+      double totalSwap = 0.0;
+      double totalCommission = 0.0;
+      if(HistorySelectByPosition(positionId))
+      {
+         int dealTotal = HistoryDealsTotal();
+         for(int d = 0; d < dealTotal; d++)
+         {
+            ulong dTicket = HistoryDealGetTicket(d);
+            if(dTicket > 0)
+            {
+               totalProfit += HistoryDealGetDouble(dTicket, DEAL_PROFIT);
+               totalSwap += HistoryDealGetDouble(dTicket, DEAL_SWAP);
+               totalCommission += HistoryDealGetDouble(dTicket, DEAL_COMMISSION);
+            }
+         }
+      }
+      else
+      {
+         totalProfit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+         totalSwap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+         totalCommission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      }
+      double netLiquidProfit = totalProfit + totalSwap + totalCommission;
       
       float label = 0.0f; // Default: NOT_OPEN
       

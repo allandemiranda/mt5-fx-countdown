@@ -328,6 +328,7 @@ void UpdateActiveTradesExcursion()
    if(size == 0) return;
    double currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   if(currentBid <= 0.0 || currentAsk <= 0.0) return;
    
    for(int i = 0; i < size; i++)
    {
@@ -393,9 +394,14 @@ bool IsTradeScheduleAllowed(const datetime barTime)
    int startSec = g_daySchedules[dayIdx].startSeconds;
    int endSec   = g_daySchedules[dayIdx].endSeconds;
    
-   // If endSec is 0 (00:00:00) or equal to startSec, full 24h allowed for this active day
-   if(endSec == 0 || endSec == startSec)
+   // FIN-02: Resolve midnight ambiguity (00:00:00)
+   // 1) 00:00:00 to 00:00:00 means full 24h trading allowed
+   if(startSec == 0 && endSec == 0)
       return true;
+      
+   // 2) startSec > 0 and endSec == 0 means trade from startSec until midnight / end of day (86400 seconds)
+   if(startSec > 0 && endSec == 0)
+      endSec = 86400;
       
    int barSec = dt.hour * 3600 + dt.min * 60 + dt.sec;
    
@@ -1397,6 +1403,7 @@ void ApplyMacroAction(const string symbol, const string action, const int traili
       double currentSL = PositionGetDouble(POSITION_SL);
       double currentTP = PositionGetDouble(POSITION_TP);
       double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      if(point <= 0.0) point = _Point;
       int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
       long stopLevel = SymbolInfoInteger(symbol, SYMBOL_TRADE_STOPS_LEVEL);
       long spread    = SymbolInfoInteger(symbol, SYMBOL_SPREAD);
@@ -1972,6 +1979,7 @@ void OnTick()
    auditRec.garchSlPoints = slPoints;
    
    double point      = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   if(point <= 0.0) point = _Point;
    int digits        = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    long stopsLevel   = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
    
@@ -2175,7 +2183,9 @@ void OnTick()
             double dPrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
             if(dPrice > 0.0) fillPrice = dPrice;
          }
-         double slippagePts = (fillPrice - ask) / point;
+         if(point <= 0.0) point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+         if(point <= 0.0) point = _Point;
+         double slippagePts = (point > 0.0) ? (fillPrice - ask) / point : 0.0;
          ulong posId = 0;
          if(dealTicket > 0 && HistoryDealSelect(dealTicket))
             posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
@@ -2234,7 +2244,9 @@ void OnTick()
             double dPrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
             if(dPrice > 0.0) fillPrice = dPrice;
          }
-         double slippagePts = (bid - fillPrice) / point;
+         if(point <= 0.0) point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+         if(point <= 0.0) point = _Point;
+         double slippagePts = (point > 0.0) ? (bid - fillPrice) / point : 0.0;
          ulong posId = 0;
          if(dealTicket > 0 && HistoryDealSelect(dealTicket))
             posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
@@ -2332,6 +2344,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                rec.orderLatencyMs      = g_activeTrades[idx].orderLatencyMs;
                
                double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+               if(point <= 0.0) point = _Point;
                if(point > 0.0)
                {
                   if(rec.orderType == "BUY")

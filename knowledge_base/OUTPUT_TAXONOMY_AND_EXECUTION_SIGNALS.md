@@ -1,7 +1,66 @@
 # Ecosystem Output Taxonomy & Causal Execution Signals Architecture
 **Authoritative Technical Specification, Output Inventory, and Causal Order Routing Protocol**  
 **Classification**: Institutional Quantitative Research & Financial Execution Architecture  
-**Universal Timezone Standard**: Eastern European Time / Eastern European Summer Time (EET/EEST, MT5 Server Time)
+**System Standard**: Eastern European Time / Eastern European Summer Time (EET/EEST, MT5 Server Time: UTC+2 / UTC+3)  
+**Applicability**: MetaTrader 5 Strategy Tester (`DMatrix-EA.mq5`), Live Execution Engine (`LiveONNX-EA.mq5`), Dual XGBoost Pipeline (`src/`), Macroeconomic SQLite Governance (`macro_governance.db`), Autonomous Macro Collector (`macro_agent/`), and Execution Telemetry Audit Engine (`AuditLogs/*.db`).
+
+---
+
+## Table of Contents
+1. [Executive Summary & Architectural Abstract](#1-executive-summary--architectural-abstract)
+2. [Complete Inventory of Ecosystem Outputs](#2-complete-inventory-of-ecosystem-outputs)
+3. [Dataset Generation Subsystem (DMatrix-EA.mq5)](#3-dataset-generation-subsystem-dmatrix-eamq5)
+   - [3.1 CSV Dataset File Structure & Schema Specifications](#31-csv-dataset-file-structure--schema-specifications)
+   - [3.2 Feature Naming Conventions & Lag-Suffix Flattening](#32-feature-naming-conventions--lag-suffix-flattening)
+   - [3.3 Triple Barrier Labeling & The Golden Rule of Net Liquid Profit](#33-triple-barrier-labeling--the-golden-rule-of-net-liquid-profit)
+   - [3.4 In-Memory Ticket Tracking Architecture (Bypassing 31-Char Limit)](#34-in-memory-ticket-tracking-architecture-bypassing-31-char-limit)
+   - [3.5 Unresolved Position Handling at Deinitialization (OnDeinit)](#35-unresolved-position-handling-at-deinitialization-ondeinit)
+   - [3.6 Chronological QuickSort Invariant & Timestamp Stripping](#36-chronological-quicksort-invariant--timestamp-stripping)
+   - [3.7 Dataset Metadata JSON Contract (<Symbol>_<TF>_metadata.json)](#37-dataset-metadata-json-contract-symbol_tf_metadatajson)
+4. [Model Training & Compilation Subsystem (src/trainer.py & src/onnx_exporter.py)](#4-model-training--compilation-subsystem-srctrainerpy--srconnx_exporterpy)
+   - [4.1 Dual Independent Gradient Boosting Modeling Rationale](#41-dual-independent-gradient-boosting-modeling-rationale)
+   - [4.2 Time-Series Chronological Split (Zero Leakage)](#42-time-series-chronological-split-zero-leakage)
+   - [4.3 Optuna Bayesian Optimization Engine & Trial Logs](#43-optuna-bayesian-optimization-engine--trial-logs)
+   - [4.4 Booster Evaluation Metrics](#44-booster-evaluation-metrics)
+   - [4.5 ONNX Compilation Contract (Pure 1D Float, [None, D] -> [None, 2])](#45-onnx-compilation-contract-pure-1d-float-none-d---none-2)
+   - [4.6 Multi-Directory Deployment Matrix](#46-multi-directory-deployment-matrix)
+   - [4.7 Calibrated Decision Thresholds & Probability Routing](#47-calibrated-decision-thresholds--probability-routing)
+   - [4.8 Epistemic Uncertainty Quantification: Shannon Entropy H(p)](#48-epistemic-uncertainty-quantification-shannon-entropy-hp)
+   - [4.9 Conviction Delta Squeeze (|P_buy - P_sell|)](#49-conviction-delta-squeeze-p_buy---p_sell)
+   - [4.10 Dynamic Econometric Risk Coupling: GARCH(1,1) Volatility Metrics](#410-dynamic-econometric-risk-coupling-garch11-volatility-metrics)
+   - [4.11 Structural S&R Snapped Geometry](#411-structural-sr-snapped-geometry)
+   - [4.12 Directional XGBoost & Optuna Overrides Impact](#412-directional-xgboost--optuna-overrides-impact)
+5. [Pipeline Artifacts Subsystem](#5-pipeline-artifacts-subsystem)
+   - [5.1 Native MT5 Presets (.set) Generation](#51-native-mt5-presets-set-generation)
+   - [5.2 Chart Templates (.tpl) Generation](#52-chart-templates-tpl-generation)
+   - [5.3 Binary Compilation (.ex5) via MetaEditor CLI](#53-binary-compilation-ex5-via-metaeditor-cli)
+6. [Macroeconomic SQLite Governance Subsystem (macro_governance.db)](#6-macroeconomic-sqlite-governance-subsystem-macro_governancedb)
+   - [6.1 SQLite Architecture, WAL Mode, and Defensive Backup Infrastructure](#61-sqlite-architecture-wal-mode-and-defensive-backup-infrastructure)
+   - [6.2 Table Schemas & Temporal Conventions](#62-table-schemas--temporal-conventions)
+   - [6.3 Action Taxonomy Emitted to LiveONNX-EA.mq5](#63-action-taxonomy-emitted-to-liveonnx-eamq5)
+   - [6.4 Runtime Regimes: Live Trading vs Strategy Tester Backtesting](#64-runtime-regimes-live-trading-vs-strategy-tester-backtesting)
+7. [Live Execution Signals & MT5 Order Dispatch (LiveONNX-EA.mq5)](#7-live-execution-signals--mt5-order-dispatch-liveonnx-eamq5)
+   - [7.1 Bar-Open Execution Trigger & Zero-Copy ONNX Inference](#71-bar-open-execution-trigger--zero-copy-onnx-inference)
+   - [7.2 Probability Calibration, Decision Thresholds & Direction Filters](#72-probability-calibration-decision-thresholds--direction-filters)
+   - [7.3 Dynamic GARCH(1,1) Volatility Risk Modeling](#73-dynamic-garch11-volatility-risk-modeling)
+   - [7.4 Structural Support & Resistance (S&R) Snapping Subsystem](#74-structural-support--resistance-sr-snapping-subsystem)
+   - [7.5 Pre-Trade Viability Governance (The 3 Protection Gates)](#75-pre-trade-viability-governance-the-3-protection-gates)
+   - [7.6 Lot Sizing Governance: Fixed vs Dynamic Viable Downsizing](#76-lot-sizing-governance-fixed-vs-dynamic-viable-downsizing)
+   - [7.7 Order Dispatch (CTrade), Filling Modes & Retcodes](#77-order-dispatch-ctrade-filling-modes--retcodes)
+   - [7.8 Diagnostic Logging Streams & Telemetry Prefixes](#78-diagnostic-logging-streams--telemetry-prefixes)
+   - [7.9 Consecutive Position & Signal Management Execution Outputs](#79-consecutive-position--signal-management-execution-outputs)
+   - [7.10 Pre-Existing Open Positions Lifecycle & Dynamic TP/SL State Transitions](#710-pre-existing-open-positions-lifecycle--dynamic-tpsl-state-transitions)
+   - [7.11 Custom Fitness Metric Output (OnTester)](#711-custom-fitness-metric-output-ontester)
+8. [Mandatory Institutional Execution & Telemetry Audit Subsystem (CExecutionAuditor)](#8-mandatory-institutional-execution--telemetry-audit-subsystem-cexecutionauditor)
+   - [8.1 Architectural Purpose: Leading vs. Lagging Indicators](#81-architectural-purpose-leading-vs-lagging-indicators)
+   - [8.2 Database Physical Location & Concurrency](#82-database-physical-location-and-concurrency)
+   - [8.3 Tri-Pillar Relational Table Schema (Exhaustive Column Mapping)](#83-tri-pillar-relational-table-schema-exhaustive-column-mapping)
+   - [8.4 High-Value Quantitative Audit SQL Queries](#84-high-value-quantitative-audit-sql-queries)
+9. [Causal Execution State Machines & System Flowcharts](#9-causal-execution-state-machines--system-flowcharts)
+   - [9.1 End-to-End System Causal Pipeline Flowchart](#91-end-to-end-system-causal-pipeline-flowchart)
+   - [9.2 Real-Time Order Execution & Defensive State Machine](#92-real-time-order-execution--defensive-state-machine)
+10. [Critical Quantitative & Systems Engineering Audit](#10-critical-quantitative--systems-engineering-audit)
+11. [Didactic References & Further Reading](#11-didactic-references--further-reading)
 
 ---
 
@@ -14,15 +73,13 @@ The architecture implemented within this ecosystem unites five foundational doma
 2. **Dual Supervised Machine Learning**: Training independent directional binary classifiers with Bayesian hyperparameter optimization and chronological validation (`src/trainer.py`).
 3. **Low-Latency Graph Compilation & Artifact Synchronization**: Pruning tree graphs into flat 1D Float ONNX tensors (`src/onnx_exporter.py`) and distributing synchronized presets (`.set`) and chart templates (`.tpl`).
 4. **Macroeconomic SQLite Governance**: Ingesting high-impact news catalysts and scheduled economic calendar events to emit defensive capital preservation signals (`macro_governance.db`).
-5. **Real-Time Live Order Execution**: Ingesting live ticks, calculating dynamic econometric risk envelopes, snapping stops to structural support/resistance, enforcing account margin gates, and dispatching orders via MetaTrader 5 C++ runtime (`LiveONNX-EA.mq5`).
-
-This document provides an exhaustive, publication-grade reference mapping every data artifact, log stream, statistical metric, and causal signal generated across the lifecycle. It establishes the causal state transitions that convert out-of-sample machine learning probabilities $P(\text{OPEN} \mid \mathbf{x}_t)$ into institutional market orders, while identifying subtle system-level edge cases, race conditions, and numerical hazards.
+5. **Real-Time Live Order Execution & Telemetry Audit**: Ingesting live ticks, calculating dynamic econometric risk envelopes, snapping stops to structural support/resistance, enforcing account margin gates, and logging immutable 3-pillar audit telemetry into SQLite (`LiveONNX-EA.mq5`, `CExecutionAuditor.mqh`).
 
 ---
 
 ## 2. Complete Inventory of Ecosystem Outputs
 
-The table below delineates the comprehensive catalog of all files, binary streams, database tables, and operating system artifacts produced across the pipeline.
+The table below delineates the comprehensive catalog of all files, binary streams, database tables, and operating system artifacts produced across the lifecycle.
 
 | Output Domain | Artifact Name / Stream Identifier | Producer Module | Consumer Module | Lifetime & Scope | Physical Storage Location | Data Format / Protocol | Data Type & Precision | Primary Failure Modes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -32,7 +89,7 @@ The table below delineates the comprehensive catalog of all files, binary stream
 | **Model / ML** | `model_buy.onnx` / `<Symbol>_<TF>_model_buy.onnx` | `src/onnx_exporter.py` | `LiveONNX-EA.mq5` (`OnnxRun`) | Production live inference | `MQL5/Files/Models/` & `Common/Files/Models/` | ONNX Graph (Protobuf) | Pure 1D Float `[None, 130] -> [None, 2]` (`FloatTensorType`) | ZipMap presence, tensor shape mismatch (ERR 5803) |
 | **Model / ML** | `model_sell.onnx` / `<Symbol>_<TF>_model_sell.onnx` | `src/onnx_exporter.py` | `LiveONNX-EA.mq5` (`OnnxRun`) | Production live inference | `MQL5/Files/Models/` & `Common/Files/Models/` | ONNX Graph (Protobuf) | Pure 1D Float `[None, 130] -> [None, 2]` (`FloatTensorType`) | ZipMap presence, tensor shape mismatch (ERR 5803) |
 | **Model / ML** | Optuna Trial Logs & Metrics | `src/trainer.py` | CLI Telemetry / CI | Ephemeral training logs | `stdout` / Process Console | Plain Text / Structured Log Streams | Tabular Floats (64-bit float LogLoss, ROC-AUC) | Non-convergence, invalid search space bounds |
-| **Model / ML** | Threshold Sensitivity Grid | `src/trainer.py` | Quantitative Researcher / CLI | Parametric threshold sweep report | `stdout` / Process Console | Plain Text Tabular Stream | Grid: threshold $0.40 \dots 0.80$, step 0.05 | Empty validation set, zero positive class labels |
+| **Model / ML** | Threshold Sensitivity Grid | `src/trainer.py` | Quantitative Researcher / CLI | Parametric threshold sweep report | `stdout` / Process Console | Plain Text Tabular Stream | Grid: threshold $0.40 \dots 0.70$, step 0.02 | Empty validation set, zero positive class labels |
 | **Artifacts** | `LiveONNX-EA_<Symbol>_<TF>.set` | `src/preset_generator.py` | `LiveONNX-EA.mq5` / Trader UI | Production runtime inputs | `MQL5/Presets/` & `Common/Files/Presets/` | MT5 Native Key-Value Config (UTF-8) | Key-value pairs (Booleans as 1/0, strings, doubles) | Missing key, invalid numeric string representation |
 | **Artifacts** | `DMatrix-EA_<Symbol>_<TF>.set` | `src/preset_generator.py` | `DMatrix-EA.mq5` / Strategy Tester | Tester configuration | `MQL5/Presets/` & `Common/Files/Presets/` | MT5 Native Key-Value Config (UTF-8) | Key-value pairs (Booleans as 1/0, strings, doubles) | Missing key, invalid numeric string representation |
 | **Artifacts** | `<Symbol>_<TF>.tpl` | `src/template_generator.py` | MT5 Chart Terminal UI | Visual chart layout | `Profiles/Templates/` & `Common/Files/Templates/` | MT5 Proprietary Chart Template (ASCII) | XML-like MT5 template blocks (Colors, Subwindows) | Corrupted template markup, missing indicator IDs |
@@ -41,9 +98,9 @@ The table below delineates the comprehensive catalog of all files, binary stream
 | **Macro DB** | `calendar_events` table | `macro_agent/db_client.py` | `LiveONNX-EA.mq5` (`DatabaseRead`) | Scheduled macro events | `Common/Files/macro_governance.db` | SQLite 3 Table (WAL Mode) | 8 columns: `start_time` / `end_time` (EET/EEST text), ints | Table lock (`SQLITE_BUSY`), missing columns |
 | **Macro DB** | `news_events` table | `macro_agent/db_client.py` | `LiveONNX-EA.mq5` (`DatabaseRead`) | Breaking news blacklist | `Common/Files/macro_governance.db` | SQLite 3 Table (WAL Mode) | 5 columns: `symbol` PK, title/desc text, action | Table lock (`SQLITE_BUSY`), missing columns |
 | **Macro DB** | `macro_governance.db.*.bkp` | `macro_agent/db_client.py` | Safe rollback recovery | Disaster recovery copy | `Common/Files/` | SQLite 3 Database Snapshot | Binary SQLite 3 database file snapshot | Disk full, permission denied during backup copy |
-| **Audit DB** | `candle_telemetry` table | `LiveONNX-EA.mq5` (`CExecutionAuditor`) | Audit / Drift Detection Routines | Immutable bar-by-bar history | `Common/Files/AuditLogs/<Symbol>_<TF>_<TS>.db` | SQLite 3 Table (WAL Mode) | 45 active columns (55 institutional telemetry schema) | Disk full, table lock, unescaped quote syntax error |
+| **Audit DB** | `candle_telemetry` table | `LiveONNX-EA.mq5` (`CExecutionAuditor`) | Audit / Drift Detection Routines | Immutable bar-by-bar history | `Common/Files/AuditLogs/<Symbol>_<TF>_<TS>.db` | SQLite 3 Table (WAL Mode) | 45 active columns in MQL5 (expanding to 55) | Disk full, table lock, unescaped quote syntax error |
 | **Audit DB** | `system_events_log` table | `LiveONNX-EA.mq5` (`CExecutionAuditor`) | System Incident Audits | Operational alert history | `Common/Files/AuditLogs/<Symbol>_<TF>_<TS>.db` | SQLite 3 Table (WAL Mode) | 8 columns: severity (`INFO`, `WARNING`, `ERROR`, `CRIT`) | Disk full, database handle invalid |
-| **Audit DB** | `trade_lifecycle_log` table | `LiveONNX-EA.mq5` (`CExecutionAuditor`) | Trade Outcome Attribution | Closed-loop trade attribution | `Common/Files/AuditLogs/<Symbol>_<TF>_<TS>.db` | SQLite 3 Table (WAL Mode) | 25 active columns (30 institutional attribution schema) | Asynchronous deal race, missing position ID |
+| **Audit DB** | `trade_lifecycle_log` table | `LiveONNX-EA.mq5` (`CExecutionAuditor`) | Trade Outcome Attribution | Closed-loop trade attribution | `Common/Files/AuditLogs/<Symbol>_<TF>_<TS>.db` | SQLite 3 Table (WAL Mode) | 25 active columns in MQL5 (expanding to 30) | Asynchronous deal race, missing position ID |
 | **Execution** | Market Buy / Sell Orders | `LiveONNX-EA.mq5` (`CTrade`) | Broker Matching Engine | Live financial positions | Broker Trade Server Book | FIX 4.4 / MT5 Gateway Trade Request | Volume (0.01 lot step), fill price (5 decimals) | Offquotes (10004), market closed (10018), price off |
 | **Execution** | Consecutive Scaling Orders | `LiveONNX-EA.mq5` (`CConsecutiveManager`) | Broker Matching Engine | Position continuation | Broker Trade Server Book | FIX 4.4 / MT5 Gateway Trade Request | Incremental lots, synchronized stops | Margin cushion breach, max consecutive orders reached |
 | **Execution** | Position Modification Requests | `LiveONNX-EA.mq5` (`CTrade`) | Broker Matching Engine | SL/TP / Breakeven / Trail | Broker Trade Server Book | FIX 4.4 / MT5 Gateway Stop Modification | Stop prices clamped to StopsLevel | Invalid stops (10016), frozen levels |
@@ -55,20 +112,26 @@ The table below delineates the comprehensive catalog of all files, binary stream
 
 ## 3. Dataset Generation Subsystem (`DMatrix-EA.mq5`)
 
-The data collection subsystem is tasked with solving the **Triple Barrier Labeling Problem** ([López de Prado, 2018](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086)) within MetaTrader 5 without introducing lookahead bias, memory leaks, or string truncation artifacts.
+The data collection subsystem solves the **Triple Barrier Labeling Problem** ([López de Prado, 2018](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086)) within MetaTrader 5 without introducing lookahead bias, memory leaks, or string truncation artifacts.
 
 ### 3.1 CSV Dataset File Structure & Schema Specifications
 
-The collector produces two strictly partitioned files:
+The collector produces two strictly partitioned files per asset and timeframe:
 - `<Symbol>_<Timeframe>_buy.csv` (e.g., `EURUSD_H1_buy.csv`)
 - `<Symbol>_<Timeframe>_sell.csv` (e.g., `EURUSD_H1_sell.csv`)
 
 #### Exact CSV File Conventions:
-1. **Delimiter**: Strict single comma (`,`), without trailing spaces.
+1. **Delimiter**: Strict single comma (`,`), without whitespace padding.
 2. **Line Terminations**: Standard CRLF (`\r\n`) or LF (`\n`).
 3. **Numerical Precision**: Float feature values formatted to 6 decimal places (`%.6f`), and binary labels formatted to 1 decimal place (`%.1f`), e.g., `1.0` or `0.0`.
 4. **Header Line**: A single comma-delimited string representing all flattened feature names across the lookback horizon, terminated strictly with the final token `,label`.
 5. **Timestamp Column Stripping**: While timestamps (`datetime baseTimestamp`) are stored internally in RAM to guarantee chronological sorting, they are **strictly excluded** from the final CSV file. This prevents decision trees from memorizing absolute time indices, forcing gradient boosting splits to evaluate purely stationary market indicators, volatility, and geometry.
+
+#### Sample Header and Data Rows ($N=4$ Lookback, 130 Features):
+```csv
+adx_main_t,adx_pdi_t,adx_ndi_t,atr_t,bands_diff_mid_t,bands_bandwidth_t,macd_main_t,macd_signal_t,ma_fast_diff_t,ma_slow_diff_t,rsi_t,stoch_k_t,stoch_d_t,candle_type_t,candle_body_t,candle_upper_shadow_t,candle_lower_shadow_t,timestamp_week_t,timestamp_day_t,open_markets_t,spread_t,garch_omega_t,garch_vol_ratio_t,garch_vol_trend_t,garch_sigma_cond_t,garch_sigma_agg_t,...,garch_sigma_agg_t_minus_4,label
+24.125000,18.430000,22.110000,145.000000,-12.000000,280.000000,-0.000450,-0.000320,-8.000000,15.000000,48.250000,35.400000,42.100000,1.000000,25.000000,12.000000,8.000000,2.000000,1.000000,3.000000,2.000000,0.000012,1.045000,0.985000,0.004210,0.011850,...,0.011200,1.0
+```
 
 ### 3.2 Feature Naming Conventions & Lag-Suffix Flattening
 
@@ -76,77 +139,15 @@ Feature extraction is orchestrated by `CFeatureExtractor` (`MQL5/Include/Feature
 
 The mathematical dimensionality $D$ of the row vector $\mathbf{x}_t$ is:
 $$D = K_{\text{base}} \times (H + 1)$$
-where $K_{\text{base}}$ is the number of active base features per single bar.
-
-#### Base Feature Groups and Nominal Dimensions:
-- **Indicator Features ($K_{\text{ind}} = 12$)**:
-  - `adx_main`, `adx_pdi`, `adx_ndi` (3 features)
-  - `atr` (1 feature, scaled as $\text{ATR} / \text{\_Point}$)
-  - `bands_diff_mid`, `bands_bandwidth` (2 features, scaled in broker points)
-  - `macd_main`, `macd_signal` (2 features, scaled in broker points)
-  - `ma_fast_diff` (1 feature, $\frac{\text{Close} - \text{MA}_{\text{fast}}}{\text{\_Point}}$)
-  - `ma_slow_diff` (1 feature, $\frac{\text{Close} - \text{MA}_{\text{slow}}}{\text{\_Point}}$)
-  - `rsi` (1 feature, $0.0$ to $100.0$)
-  - `stoch_k`, `stoch_d` (2 features, $0.0$ to $100.0$)
-- **Price Action & Candlestick Geometry ($K_{\text{candle}} = 4$)**:
-  - `candle_type`: Categorical float ($0.0f = \text{Doji/Neutral}, 1.0f = \text{Bullish } (C > O), 2.0f = \text{Bearish } (C < O)$)
-  - `candle_body`: Absolute body height in points ($\frac{|C - O|}{\text{\_Point}}$)
-  - `candle_upper_shadow`: Upper wick height in points ($\frac{H - \max(O, C)}{\text{\_Point}}$)
-  - `candle_lower_shadow`: Lower wick height in points ($\frac{\min(O, C) - L}{\text{\_Point}}$)
-- **Temporal & Microstructure Features ($K_{\text{temp}} = 4$)**:
-  - `timestamp_week`: Normalized weekday ($0.0f = \text{Mon}, 1.0f = \text{Tue}, 2.0f = \text{Wed}, 3.0f = \text{Thu}, 4.0f = \text{Fri}$)
-  - `timestamp_day`: Intraday session quarter ($0.0f = [00:00, 06:00), 1.0f = [06:00, 12:00), 2.0f = [12:00, 18:00), 3.0f = [18:00, 24:00)$)
-  - `open_markets`: Active Forex session cluster code ($0.0f$ to $7.0f$, mapped in EET/EEST server time)
-  - `spread`: Current broker bid-ask spread in points
-- **Econometric GARCH(1,1) Dynamics ($K_{\text{garch}} = 5$)**:
-  - `garch_omega`: Baseline variance target $\omega = s^2(1 - \alpha - \beta)$
-  - `garch_vol_ratio`: Conditional-to-unconditional volatility expansion ratio $\frac{\sigma_{\text{cond}}}{\sqrt{s^2}}$
-  - `garch_vol_trend`: Term structure volatility slope $\frac{\sigma_{\text{agg}}}{\sqrt{H} \cdot \sigma_{\text{cond}}}$
-  - `garch_sigma_cond`: Instantaneous one-step conditional return volatility $\sigma_{\text{cond}}$
-  - `garch_sigma_agg`: Forward $H$-step aggregated cumulative return standard deviation $\sigma_{\text{agg}}$
-
-**Total Base Features**: $K_{\text{base}} = 12 + 4 + 4 + 5 = 25$ features (or $26$ when `useATR`, `useBands`, `useFastMA`, `useSlowMA`, `useCandlestick`, `useSpread` are all simultaneously toggled with all optional indicators).  
-For $K_{\text{base}} = 26$ and $H = 4$:
-$$D = 26 \times (4 + 1) = 130 \text{ float columns}$$
+where $K_{\text{base}}$ is the number of active base features per single bar ($K_{\text{base}} = 26$ when all toggles are active).
 
 #### Header Suffixing Convention:
-- Step $h = 0$ (current base bar forming at decision time): `<base_name>_t`
-- Step $h \in [1, H]$ (lagged completed historical bars): `<base_name>_t_minus_<h>`
-
-*Example Header Chunk*:
-```csv
-adx_main_t,adx_pdi_t,adx_ndi_t,atr_t,...,garch_sigma_agg_t,adx_main_t_minus_1,...,garch_sigma_agg_t_minus_4,label
-```
+- Current decision bar ($h = 0$): `<base_feature_name>_t`
+- Lagged historical bars ($h \in [1, H]$): `<base_feature_name>_t_minus_<h>`
 
 ### 3.3 Triple Barrier Labeling & The Golden Rule of Net Liquid Profit
 
 Labeling in `COrderTracker` (`MQL5/Include/OrderTracker.mqh`) translates market path trajectory into a binary outcome $y \in \{0.0f, 1.0f\}$.
-
-```mermaid
-flowchart TD
-    NEW_BAR["New Bar Open (t)"] --> SIMUL_EXEC["Execute 1 BUY & 1 SELL Simultaneously"]
-    SIMUL_EXEC --> RAM_REG["Register STrackedPosition in RAM (Tickets, Features, Levels)"]
-    RAM_REG --> TICK_POLL{"Tick Trajectory Event"}
-    
-    TICK_POLL -->|Bar Counter >= InpLabelHorizonBars| TIMEOUT["Vertical Barrier Timeout Hit"]
-    TIMEOUT --> CLOSE_MKT["Close Position at Market (CTrade::PositionClose)"]
-    
-    TICK_POLL -->|Price Touches TP| TP_HIT["Upper Barrier Hit (DEAL_REASON_TP)"]
-    TICK_POLL -->|Price Touches SL| SL_HIT["Lower Barrier Hit (DEAL_REASON_SL)"]
-    
-    CLOSE_MKT --> EVAL_DEAL["OnTradeTransaction (DEAL_ENTRY_OUT)"]
-    TP_HIT --> EVAL_DEAL
-    SL_HIT --> EVAL_DEAL
-    
-    EVAL_DEAL --> CALC_NET["Compute Net Liquid Profit:<br/>Profit + Swap + Commission"]
-    CALC_NET --> COND_CHECK{"NetLiquidProfit > 0.0<br/>AND (Reason == TP OR Proximity TP)?"}
-    
-    COND_CHECK -->|YES| LABEL_1["Assign Label: 1.0f (OPEN / Positive Target)"]
-    COND_CHECK -->|NO| LABEL_0["Assign Label: 0.0f (NOT_OPEN / Negative Sample)"]
-    
-    LABEL_1 --> STORE_SAMPLE["Append SLabeledSample to Recorded Samples Array"]
-    LABEL_0 --> STORE_SAMPLE
-```
 
 #### Mathematical Definition of Barriers:
 1. **Upper Barrier (Take Profit)**:
@@ -168,13 +169,13 @@ $$\text{Label } y_i = \begin{cases}
 0.0f, & \text{if } \Pi_{\text{net}} \le 0.0 \lor \text{Reason} = \text{DEAL\_REASON\_SL} \lor \text{VerticalTimeout} \lor \text{Unresolved}
 \end{cases}$$
 
-> **Key Rule**: If an order touches Take Profit, but extreme broker commissions or negative financing swap reduce $\Pi_{\text{net}} \le 0.0$, the sample is **strictly classified as $0.0f$**. This ensures the gradient boosting algorithm never optimizes toward financially dilutive signals.
+> **Key Invariant**: If an order touches Take Profit, but extreme broker commissions or negative financing swap reduce $\Pi_{\text{net}} \le 0.0$, the sample is **strictly classified as $0.0f$**. This ensures gradient boosting never optimizes toward financially dilutive signals.
 
-### 3.4 In-Memory Ticket Tracking Architecture (Overcoming the 31-Character MT5 Limit)
+### 3.4 In-Memory Ticket Tracking Architecture (Bypassing 31-Char Limit)
 
 MetaTrader 5 limits order comments (`MqlTradeRequest::comment`) to **31 ANSI characters**. A 130-dimensional floating-point feature vector requires $\approx 1100$ characters, rendering comment-based state passing impossible.
 
-`COrderTracker` bypasses this by allocating memory buffers in RAM:
+`COrderTracker` bypasses this by allocating dynamic memory buffers in RAM:
 ```cpp
 struct STrackedPosition
 {
@@ -208,7 +209,7 @@ for(int i = 0; i < m_activeCount; i++) {
 
 ### 3.6 Chronological QuickSort Invariant & Timestamp Stripping
 
-Financial time series exhibit auto-correlation. To strictly enforce chronological ordering without dynamic struct copying, `COrderTracker::SortChronologically()` employs an index-based QuickSort:
+Financial time series exhibit autocorrelation. To strictly enforce chronological ordering without dynamic struct copying, `COrderTracker::SortChronologically()` employs an index-based QuickSort:
 - An array `int m_sortIndices[]` of size $N_{\text{samples}}$ is initialized to $[0, 1, \dots, N-1]$.
 - QuickSort partitions the indices by comparing `m_recordedSamples[m_sortIndices[i]].baseTimestamp`.
 - Samples are then written to the CSV file sequentially using `m_sortIndices[k]`.
@@ -230,7 +231,7 @@ Synchronized during training and deployed alongside models:
     "adx_pdi_t",
     "garch_sigma_agg_t_minus_4"
   ],
-  "timestamp": "2026-09-03 19:22:15 UTC",
+  "timestamp": "2026-09-04 12:00:00 UTC",
   "metrics": {
     "buy": {
       "direction": "BUY",
@@ -379,7 +380,7 @@ To prevent train-serving skew and eliminate arbitrary fixed-pip stops, the live 
 - **$\sigma_{\text{cond}}$ (`garchSigmaCond`)**: One-step conditional standard deviation forecast:
   $$\sigma_{\text{cond}} = \sqrt{\omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2}$$
 - **$\sigma_{\text{agg}}$ (`garchSigmaAgg`)**: Aggregated multi-step forward volatility over holding horizon $H_{\text{risk}}$ (`InpRiskGarchHorizon`):
-  $$\sigma_{\text{agg}} = \sqrt{ \sum_{h=1}^{H_{\text{risk}}} \left( \sigma^2 + (\alpha + \beta)^{h-1}(\sigma_t^2 - \sigma^2) \right) }$$
+  $$\sigma_{\text{agg}} = \sqrt{ \sum_{h=1}^{H_{\text{risk}}} \left( \bar{\sigma}^2 + (\alpha + \beta)^{h-1}(\sigma_t^2 - \bar{\sigma}^2) \right) }$$
 - **$\text{VolRatio}$ (`garchVolRatio`)**: Expansion ratio $\frac{\sigma_{\text{cond}}}{\sqrt{s^2}}$, where $s^2$ is unconditional sample variance.
 - **Dynamic GARCH Stop Envelopes**:
   $$\text{garchTpPoints} = \text{InpKTP} \cdot \frac{P_{\text{close}} \cdot \sigma_{\text{agg}}}{\text{\_Point}}, \quad \text{garchSlPoints} = \text{InpKSL} \cdot \frac{P_{\text{close}} \cdot \sigma_{\text{agg}}}{\text{\_Point}}$$
@@ -391,6 +392,10 @@ When `InpEnableSRSnapping = true`, dynamic stops are geometrically refined again
 - `finalSlPrice`: The finalized Stop Loss price, snapped beyond support (BUY) or resistance (SELL) and strictly clamped to never exceed `garchSlPoints`.
 - `srZoneType`: Categorical output string (`"SWING_PIVOT"`, `"SWING_HIGH"`, `"SWING_LOW"`, or `"NONE"`).
 
+### 4.12 Directional XGBoost & Optuna Overrides Impact
+
+When directional overrides are specified in `.env` (e.g. `XGB_BUY_MAX_DEPTH=5` vs `XGB_SELL_MAX_DEPTH=3`), the trainer instantiates asymmetric booster configurations via `DirectionalXGBConfig`. The output ONNX graphs maintain identical input/output tensor shapes, but encapsulate distinct tree topologies optimized for bullish versus bearish market regimes.
+
 ---
 
 ## 5. Pipeline Artifacts Subsystem
@@ -399,29 +404,129 @@ Beyond machine learning models, the automated pipeline generates native platform
 
 ### 5.1 Native MT5 Presets (`.set`) Generation
 
-The preset generator (`src/preset_generator.py`) formats configuration variables into MetaTrader 5's proprietary key-value format.
-- **Filename Convention**: `LiveONNX-EA_<Symbol>_<TF>.set` and `DMatrix-EA_<Symbol>_<TF>.set`
-- **Boolean Encoding**: Converted to integer representation (`1` for `true`, `0` for `false`).
-- **LiveONNX Fallback Standard**: Parameters exclusive to `LiveONNX-EA` (e.g., `InpEnableSRSnapping`, `InpMarginSafetyMultiplier`) default strictly to the MQL5 source code defaults unless overridden in environment variables.
+The preset generator (`src/preset_generator.py`) formats configuration variables into MetaTrader 5's proprietary key-value format. Presets are mirrored to `<TERMINAL_DATA_PATH>/MQL5/Presets/` and `<COMMON_PATH>/Files/Presets/`.
+
+#### Exact Preset Keys (`LiveONNX-EA_<Symbol>_<TF>.set`):
+```ini
+; MetaTrader 5 Expert Advisor Settings (.set)
+; Auto-generated by MT5 MLOps Pipeline (EURUSD H1)
+InpMagicNumber=222100
+InpTradeDirection=0
+InpMinimalLevelAcceptedBuy=0.50
+InpMinimalLevelAcceptedSell=0.50
+InpLotSize=0.01
+InpConsecutiveMode=0
+InpMaxConsecutiveOrders=3
+InpHurdleProfitPct=50.0
+InpProfitLockPct=50.0
+InpAntiChopMinDisplacement=150
+InpSafetyOffsetPoints=20
+InpEnableSwapAmortization=1
+InpConsecutiveSlotFilter=0
+InpIgnoreConflictingSignals=1
+InpEnableOpposingRegimeFilter=0
+InpOpposingStreakThreshold=2
+InpOpposingAction=0
+InpOpposingTrailingPoints=50
+InpOpposingRecalculateRatio=0.5
+InpIgnoreAudit=0
+InpFeatureLookback=4
+InpUseADX=1
+InpUseATR=1
+InpUseBands=1
+InpUseMACD=1
+InpUseFastMA=1
+InpUseSlowMA=1
+InpUseRSI=1
+InpUseStochastic=1
+InpUseCandlestick=1
+InpUseTimestampWeek=1
+InpUseTimestampDay=1
+InpUseOpenMarkets=1
+InpUseSpread=1
+InpUseGarchFeatures=1
+InpGarchHorizon=8
+InpPriceSize=500
+InpGarchAlpha=0.05
+InpGarchBeta=0.92
+InpEnableSRSnapping=1
+InpSRLookbackBars=12
+InpSRPivotStrength=2
+InpSROffsetPoints=30
+InpSRZoneSelection=0
+InpEnableRiskFilter=1
+InpEnableDynamicLotSizing=0
+InpMaxLotSize=0.05
+InpMarginSafetyMultiplier=1.5
+InpMaxRiskRewardRatio=1.5
+InpMaxTradeRiskPct=3.0
+InpEnableCalendarFilter=1
+InpEnableNewsFilter=1
+InpRiskGarchHorizon=8
+InpKTP=1.5
+InpKSL=1.5
+InpTradeMonday=1
+InpMondayStartTime=11:00:00
+InpMondayEndTime=18:00:00
+InpTradeTuesday=1
+InpTuesdayStartTime=10:00:00
+InpTuesdayEndTime=18:00:00
+InpTradeWednesday=1
+InpWednesdayStartTime=10:00:00
+InpWednesdayEndTime=18:00:00
+InpTradeThursday=1
+InpThursdayStartTime=10:00:00
+InpThursdayEndTime=18:00:00
+InpTradeFriday=1
+InpFridayStartTime=10:00:00
+InpFridayEndTime=16:00:00
+InpModelBuyPath=Models/EURUSD_H1_model_buy.onnx
+InpModelSellPath=Models/EURUSD_H1_model_sell.onnx
+InpADXPeriod=14
+InpATRPeriod=14
+InpBandsPeriod=20
+InpBandsShift=0
+InpBandsDev=2.0
+InpBandsAppliedPrice=0
+InpMACDFastPeriod=12
+InpMACDSlowPeriod=26
+InpMACDSignalPeriod=9
+InpMACDAppliedPrice=0
+InpFastMAPeriod=20
+InpFastMAShift=0
+InpFastMAMethod=1
+InpFastMAAppliedPrice=0
+InpSlowMAPeriod=50
+InpSlowMAShift=0
+InpSlowMAMethod=1
+InpSlowMAAppliedPrice=0
+InpRSIPeriod=14
+InpRSIAppliedPrice=0
+InpStochK=8
+InpStochD=3
+InpStochSlowing=3
+InpStochMethod=0
+InpStochPriceField=0
+```
 
 ### 5.2 Chart Templates (`.tpl`) Generation
 
-`TemplateGenerator` (`src/template_generator.py`) generates XML/ASCII template files (`<Symbol>_<TF>.tpl`) deployed to:
+`TemplateGenerator` (`src/template_generator.py`) generates ASCII chart template files (`<Symbol>_<TF>.tpl`) deployed to:
 - `<TERMINAL_DATA_PATH>/MQL5/Profiles/Templates/`
 - `<TERMINAL_DATA_PATH>/Profiles/Templates/`
 - `<COMMON_PATH>/Files/Templates/`
 
 **Visual Elements Injected**:
-- Standard institutional chart aesthetics: Pure black background (`0`), lime green bull candles (`65280`), crimson bear candles (`255`).
-- Automatic binding of active indicator subgraphs matching the model's feature toggles: Bollinger Bands overlay, Fast MA, Slow MA, MACD sub-window, RSI sub-window, Stochastic sub-window, ATR sub-window, and ADX sub-window.
+- Pure black background (`color_background=0`), lime bull candles (`color_candle_bull=65280`), crimson bear candles (`color_candle_bear=255`).
+- Subwindow indicator bindings matching active feature toggles: Bollinger Bands overlay, Fast MA, Slow MA, MACD, RSI, Stochastic, ATR, and ADX sub-windows.
 
 ### 5.3 Binary Compilation (`.ex5`) via MetaEditor CLI
 
-Compilations are executed synchronously via the MetaEditor command-line interface:
+Synchronous compilation is executed via the MetaEditor command-line interface:
 ```powershell
 metaeditor64.exe /compile:"MQL5\Experts\LiveONNX-EA.mq5" /log:"compile_LiveONNX-EA.log"
 ```
-The output is an optimized binary artifact:
+Produces optimized 64-bit bytecode artifacts:
 - `MQL5/Experts/DMatrix-EA.ex5`
 - `MQL5/Experts/LiveONNX-EA.ex5`
 
@@ -434,17 +539,17 @@ Automated trading models are vulnerable to non-modeled macroeconomic regime shif
 ### 6.1 SQLite Architecture, WAL Mode, and Defensive Backup Infrastructure
 
 - **Location**: `%APPDATA%\MetaQuotes\Terminal\Common\Files\macro_governance.db`
-- **Concurrency & WAL Mode**: In Python, `db_client.py` executes `PRAGMA journal_mode=WAL;` to permit concurrent readers (MT5 terminal chart threads) while the AI agent writes news updates.
-- **Defensive Transaction Backup**: Before any write operation, `safe_db_transaction` in `db_client.py`:
-  1. Truncates the WAL checkpoint (`PRAGMA wal_checkpoint(TRUNCATE);`).
-  2. Creates a backup snapshot: `macro_governance.db.YYYYMMDD_HHMMSS_ffffff.bkp`.
+- **Concurrency & WAL Mode**: Configured with `PRAGMA journal_mode=WAL;` and `PRAGMA busy_timeout=5000;`, enabling concurrent read access by multiple terminal charts while Python writes news events.
+- **Defensive Transaction Backup (`safe_db_transaction`)**:
+  1. Executes `PRAGMA wal_checkpoint(TRUNCATE);`.
+  2. Creates timestamped backup snapshot: `macro_governance.db.YYYYMMDD_HHMMSS_ffffff.bkp`.
   3. Executes database modification.
   4. Runs `PRAGMA integrity_check;`.
-  5. Rolls back immediately from the `.bkp` snapshot if corruption is detected.
+  5. Rolls back immediately from `.bkp` snapshot if corruption is detected.
 
 ### 6.2 Table Schemas & Temporal Conventions
 
-Both tables operate strictly under **MT5 Server Time (EET/EEST)** formatted as `"YYYY-MM-DD HH:MM:SS"`.
+All event timestamps operate strictly in **EET/EEST MT5 Server Time** formatted as `"YYYY-MM-DD HH:MM:SS"`.
 
 #### 1. Table `calendar_events` (Scheduled Economic Releases):
 ```sql
@@ -474,7 +579,7 @@ CREATE TABLE IF NOT EXISTS news_events (
 
 ### 6.3 Action Taxonomy Emitted to `LiveONNX-EA.mq5`
 
-When a query against `macro_governance.db` matches the current symbol and timestamp, the EA receives one of five discrete action signals:
+When a query matches the current symbol and timestamp, the EA receives one of five discrete action signals:
 
 ```mermaid
 stateDiagram-v2
@@ -502,18 +607,18 @@ stateDiagram-v2
 ```
 
 1. **`BLOCK_ENTRIES`**:
-   - **Causal Execution**: The EA terminates candidate order evaluation for the current bar.
-   - **Impact on Open Positions**: Zero impact. Existing open trades remain governed by their dynamic GARCH/S&R stops.
+   - **Causal Execution**: EA terminates candidate order evaluation for current bar.
+   - **Impact on Open Positions**: Zero. Existing trades remain governed by their dynamic GARCH/S&R stops.
 2. **`TRAILING_STOP`**:
-   - **Causal Execution**: The EA suppresses new entries and iterates over all open positions matching `InpMagicNumber`. For profitable positions where distance exceeds `trailing_points`, Stop Loss is modified to `Bid - trailingDist` (for Buy) or `Ask + trailingDist` (for Sell).
-   - **Safety Liquidation Fallback**: If `trailing_points <= 0` or unset, the EA triggers **immediate market liquidation (`PositionClose`)** for safety.
+   - **Causal Execution**: EA suppresses new entries and iterates over active positions matching `InpMagicNumber`. For profitable positions where distance exceeds `trailing_points`, Stop Loss is modified to `Bid - trailingDist` (Buy) or `Ask + trailingDist` (Sell).
+   - **Safety Liquidation Fallback**: If `trailing_points <= 0` or modification fails, triggers **immediate market liquidation (`PositionClose`)**.
 3. **`BREAKEVEN`**:
-   - **Causal Execution**: The EA suppresses new entries and iterates over active positions. If a position is in profit and distance to entry price is $\ge \text{MinStopDist}$, Stop Loss is moved directly to `openPrice`.
-   - **Safety Liquidation Fallback**: If the distance to entry price violates broker minimum stop distance, the position is closed immediately at market to guarantee zero financial downside.
+   - **Causal Execution**: EA suppresses new entries and advances Stop Loss to entry price for positions in profit.
+   - **Safety Liquidation Fallback**: If distance to entry violates broker minimum stop distance, position is closed immediately at market to guarantee zero financial downside.
 4. **`CLOSE_ALL`**:
-   - **Causal Execution**: The EA immediately liquidates all open positions associated with the symbol and magic number at the prevailing market price via `g_trade.PositionClose(ticket)`, then terminates bar evaluation.
+   - **Causal Execution**: EA immediately liquidates all open positions associated with symbol and magic number at market price via `CTrade::PositionClose()`.
 5. **`ADVISORY_ONLY`**:
-   - **Causal Execution**: Emits an informational notice to the MT5 Experts log. Candidate trade inference and execution proceed normally without gating.
+   - **Causal Execution**: Emits an informational notice to terminal journal. Inferences and executions proceed normally without gating.
 
 ### 6.4 Runtime Regimes: Live Trading vs Strategy Tester Backtesting
 
@@ -547,8 +652,8 @@ $$P_{\text{buy}} = \text{outBuy}[1], \quad P_{\text{sell}} = \text{outSell}[1]$$
 
 ### 7.3 Dynamic GARCH(1,1) Volatility Risk Modeling
 
-Unlike naïve fixed-pip systems, the foundational Stop Loss and Take Profit envelopes scale with the forward conditional volatility of the currency pair:
-$$\sigma_{\text{agg}} = \sqrt{ \sum_{h=1}^{H_{\text{risk}}} \mathbb{E}[\sigma_{t+h}^2 \mid \mathcal{F}_t] }$$
+Unlike fixed-pip systems, the foundational Stop Loss and Take Profit envelopes scale with the forward conditional volatility of the currency pair:
+$$\sigma_{\text{agg}} = \sqrt{ \sum_{h=1}^{H_{\text{risk}}} \left( \bar{\sigma}^2 + (\alpha + \beta)^{h-1}(\sigma_t^2 - \bar{\sigma}^2) \right) }$$
 $$\text{PriceRisk} = P_{\text{close}} \cdot \sigma_{\text{agg}}, \quad \text{RiskPoints} = \frac{\text{PriceRisk}}{\text{\_Point}}$$
 $$\text{TP}_{\text{points}} = k_{\text{TP}} \cdot \text{RiskPoints}, \quad \text{SL}_{\text{points}} = k_{\text{SL}} \cdot \text{RiskPoints}$$
 where $k_{\text{TP}} = \text{InpKTP}$ and $k_{\text{SL}} = \text{InpKSL}$.
@@ -663,7 +768,7 @@ The integration of `CConsecutiveManager` generates multi-order and position modi
    - `OPPOSING_ACTION_CLOSE_IF_PROFIT`: Emits `PositionClose` if floating PnL $> 0.0f$.
    - `OPPOSING_ACTION_CLOSE_IMMEDIATE`: Emits unconditional market close order.
    - `OPPOSING_ACTION_STOP_AND_REVERSE`: Liquidates active position and immediately submits a counter-direction market order with freshly calculated GARCH/S&R levels.
-   - `OPPOSING_ACTION_TRAILING_DEFENSIVE`: Rachets stop to tight trailing distance.
+   - `OPPOSING_ACTION_TRAILING_DEFENSIVE`: Ratchets stop to tight trailing distance.
    - `OPPOSING_ACTION_BREAKEVEN_NET`: Moves Stop Loss to net-breakeven amortizing accrued negative swap and broker commission.
 
 ### 7.10 Pre-Existing Open Positions Lifecycle & Dynamic TP/SL State Transitions
@@ -687,7 +792,6 @@ $$\text{IsAdopted}(\text{pos}) = (\text{Symbol}(\text{pos}) == \text{\_Symbol}) 
   If adverse ML prediction streak $\ge \text{InpOpposingStreakThreshold}$, executes defensive compression:
   $$\text{SL}_{\text{tight}} = \text{Normalize}(\text{Bid} - \text{InpOpposingTrailingPoints} \cdot \text{\_Point})$$
 - **Macroeconomic Blackout**: If `macro_governance.db` signals `BREAKEVEN`, `TRAILING_STOP`, or `CLOSE_ALL`, executes immediate protective ratchet or market liquidation.
-- **Session End / Friday Liquidation**: If `InpCloseOnSessionEnd` is active and current time exceeds allowed schedule, invokes `PositionClose` across all adopted tickets.
 
 ### 7.11 Custom Fitness Metric Output (`OnTester()`)
 
@@ -769,7 +873,7 @@ Unbroken bar-by-bar chronological time series capturing 45 active columns in the
 | 35 | `account_margin_level` | `REAL NOT NULL` | Margin level percentage $(\text{Equity}/\text{Margin}) \times 100\%$ |
 | 36 | `account_free_margin` | `REAL NOT NULL` | Free margin available in deposit currency |
 | 37 | `dynamic_lot` | `REAL NOT NULL` | Downsized viable trade volume in standard lots |
-| 38 | `consecutive_mode` | `INTEGER NOT NULL` | Active consecutive mode (0=Ratchet, 1=Chain, 2=Basket, 3=Pyramid) |
+| 38 | `consecutive_mode` | `INTEGER NOT NULL` | Active consecutive mode (0=Legacy, 1=Hurdle, 2=Chain, 3=Basket, 4=Pyramid) |
 | 39 | `consecutive_action` | `TEXT NOT NULL` | Multi-order action (`"NONE"`, `"STOP_AND_REVERSE"`, `"STEP_LOCK"`) |
 | 40 | `active_positions_count` | `INTEGER NOT NULL` | Total active positions open on account at decision time |
 | 41 | `floating_profit` | `REAL NOT NULL` | Net unrealized account floating profit/loss |
@@ -778,7 +882,7 @@ Unbroken bar-by-bar chronological time series capturing 45 active columns in the
 | 44 | `execution_ticket` | `INTEGER NOT NULL` | Result deal or order ticket from execution |
 | 45 | `inference_latency_us` | `INTEGER NOT NULL` | Zero-copy ONNX forward pass runtime in microseconds ($\mu\text{s}$) |
 
-*(Extended Institutional Taxonomy: Columns 46-55 encompass `tick_volume`, `real_volume`, `market_regime_id`, `bid_depth`, `ask_depth`, `calendar_event_id`, `news_event_id`, `session_cluster_code`, `consecutive_streak_len`, and `equity_drawdown_pct`)*.
+*(Extended Institutional Telemetry Columns 46-55 encompass `tick_volume`, `real_volume`, `market_regime_id`, `bid_depth`, `ask_depth`, `calendar_event_id`, `news_event_id`, `session_cluster_code`, `consecutive_streak_len`, and `equity_drawdown_pct`)*.
 
 #### Table 2: `system_events_log` (System Incident Telemetry)
 Granular asynchronous operational incident logging across 8 columns:
@@ -792,7 +896,7 @@ Granular asynchronous operational incident logging across 8 columns:
 - `context_data`: `TEXT NOT NULL` (Sanitized parameters, quotes, or JSON payload).
 
 #### Table 3: `trade_lifecycle_log` (Closed-Loop Outcome Attribution)
-Closed-loop trade outcome attribution recorded upon position exit across 25 active columns (expanding to 30 institutional attribution metrics):
+Closed-loop trade outcome attribution recorded upon position exit across 25 active columns:
 - **Trade Identifiers**: `id`, `created_at`, `position_id`, `entry_deal_ticket`, `exit_deal_ticket`.
 - **Instrument & Direction**: `symbol`, `timeframe`, `order_type` (`"BUY"` or `"SELL"`), `volume`.
 - **Timestamps & Durations**: `open_time`, `close_time`, `holding_duration_seconds`, `holding_bars`.
@@ -811,7 +915,7 @@ Closed-loop trade outcome attribution recorded upon position exit across 25 acti
   - `maxFavorablePoints`: Maximum Favorable Excursion (MFE) in points.
   - `maxAdversePoints`: Maximum Adverse Excursion (MAE) in points.
 
-*(Extended Institutional Taxonomy: Columns 26-30 encompass `exit_slippage_points`, `exit_latency_ms`, `mae_bars`, `mfe_bars`, and `realized_r_multiple`)*.
+*(Extended Columns 26-30 encompass `exit_slippage_points`, `exit_latency_ms`, `mae_bars`, `mfe_bars`, and `realized_r_multiple`)*.
 
 ### 8.4 High-Value Quantitative Audit SQL Queries
 
@@ -820,9 +924,9 @@ Closed-loop trade outcome attribution recorded upon position exit across 25 acti
 SELECT 
     date(bar_time) AS trade_date,
     COUNT(*) AS total_bars,
-    ROUND(AVG(shannon_entropy), 4) AS mean_entropy,
+    ROUND(AVG(prob_entropy), 4) AS mean_entropy,
     ROUND(AVG(conviction_delta), 4) AS mean_conviction,
-    SUM(has_conflicting_signals) AS conflicting_count
+    SUM(conflicting_signals) AS conflicting_count
 FROM candle_telemetry
 GROUP BY trade_date
 ORDER BY trade_date DESC;
@@ -833,10 +937,9 @@ SELECT
     COUNT(*) AS fill_count,
     ROUND(AVG(order_latency_ms), 2) AS avg_latency_ms,
     MAX(order_latency_ms) AS max_latency_ms,
-    ROUND(AVG(slippage_points), 2) AS avg_slippage_pts,
-    MAX(slippage_points) AS max_adverse_slippage_pts
-FROM candle_telemetry
-WHERE execution_action IN ('BUY_EXECUTED', 'SELL_EXECUTED')
+    ROUND(AVG(entry_slippage_points), 2) AS avg_slippage_pts,
+    MAX(entry_slippage_points) AS max_adverse_slippage_pts
+FROM trade_lifecycle_log
 GROUP BY order_type;
 
 -- Query 3: Trade Outcome Attribution & MAE/MFE Efficiency
@@ -844,8 +947,8 @@ SELECT
     exit_reason,
     COUNT(*) AS trade_count,
     ROUND(AVG(holding_bars), 1) AS avg_holding_bars,
-    ROUND(AVG(mfe_points), 1) AS avg_mfe_pts,
-    ROUND(AVG(mae_points), 1) AS avg_mae_pts,
+    ROUND(AVG(max_favorable_points), 1) AS avg_mfe_pts,
+    ROUND(AVG(max_adverse_points), 1) AS avg_mae_pts,
     ROUND(SUM(net_liquid_profit), 2) AS total_net_profit,
     ROUND(AVG(net_liquid_profit), 2) AS avg_net_profit
 FROM trade_lifecycle_log
@@ -855,10 +958,10 @@ GROUP BY exit_reason;
 SELECT 
     severity,
     subsystem,
-    event_code,
+    error_code,
     COUNT(*) AS incident_count
 FROM system_events_log
-GROUP BY severity, subsystem, event_code
+GROUP BY severity, subsystem, error_code
 ORDER BY incident_count DESC;
 ```
 
@@ -923,9 +1026,9 @@ flowchart TD
 
 ## 10. Critical Quantitative & Systems Engineering Audit
 
-A rigorous code audit across `ExecutionAuditor.mqh`, `LiveONNX-EA.mq5` (`OnTradeTransaction`, `OnTick`), and `macro_agent/db_client.py` identified critical schema synchronizations, unhandled transactional states, and numerical edge cases.
+A rigorous code audit across `ExecutionAuditor.mqh`, `LiveONNX-EA.mq5` (`OnTradeTransaction`, `OnTick`), and `macro_agent/db_client.py` identified 10 critical schema synchronizations, unhandled transactional states, and numerical edge cases:
 
-### 10.1 SQLite DDL Schema Reconciliation & Defensive Migrations
+### 10.1 SQLite DDL Schema Migration Parity (`RESOLVED`)
 - **Code Reference**: [`MQL5/Experts/LiveONNX-EA.mq5` (Lines 1186-1220)](file:///C:/Users/allan/IdeaProjects/mt5-fx-countdown/MQL5/Experts/LiveONNX-EA.mq5#L1186-L1220) vs [`macro_agent/db_client.py` (Lines 137-176)](file:///C:/Users/allan/IdeaProjects/mt5-fx-countdown/macro_agent/db_client.py#L137-L176).
 - **Audit Findings**:
   - In earlier iterations, `LiveONNX-EA.mq5` created tables without declaring `trailing_points`, causing `DatabasePrepare` failures when querying `trailing_points`.

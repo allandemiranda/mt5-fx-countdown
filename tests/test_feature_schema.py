@@ -109,12 +109,23 @@ def test_preset_generation_and_all_keys(monkeypatch: pytest.MonkeyPatch):
         # Read contents
         live_content = live_set.read_text(encoding="utf-8")
 
+        exp_buy = (
+            f"{config.eval_buy_classification_threshold:.2f}"
+            if config.eval_buy_classification_threshold is not None
+            else f"{config.eval_classification_threshold:.2f}"
+        )
+        exp_sell = (
+            f"{config.eval_sell_classification_threshold:.2f}"
+            if config.eval_sell_classification_threshold is not None
+            else f"{config.eval_classification_threshold:.2f}"
+        )
+
         # 1. Check all required parameters in LiveONNX preset
         required_live_keys = [
             f"InpMagicNumber={config.magic_number}",
             "InpTradeDirection=0",
-            "InpMinimalLevelAcceptedBuy=0.50",
-            "InpMinimalLevelAcceptedSell=0.50",
+            f"InpMinimalLevelAcceptedBuy={exp_buy}",
+            f"InpMinimalLevelAcceptedSell={exp_sell}",
             "InpLotSize=0.01",
             f"InpFeatureLookback={config.feature_lookback}",
             "InpUseADX=1",

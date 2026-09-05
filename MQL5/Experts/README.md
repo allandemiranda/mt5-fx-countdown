@@ -20,7 +20,7 @@ This directory contains the executable Expert Advisors (`.mq5`) that operate ins
        - **Stop Calculation Rules**:
          - BUY: Execution at Ask, closes at Bid $\rightarrow$ `buySL = NormalizeDouble(bid - slDist, digits)`, `buyTP = NormalizeDouble(ask + tpDist, digits)`.
          - SELL: Execution at Bid, closes at Ask $\rightarrow$ `sellSL = NormalizeDouble(ask + slDist, digits)`, `sellTP = NormalizeDouble(bid - tpDist, digits)`.
-         - Stop buffers: `slDist = MathMax(slPoints * point, (stopsLevel + spread + 5) * point)`, `tpDist = MathMax(tpPoints * point, (stopsLevel + spread + 5) * point)`.
+         - Stop buffers: Pure theoretical targets `slDist = targetSL = InpLabelMaxAdversePoints * point` and `tpDist = targetTP = InpLabelMinPoints * point`. If broker constraints `(stopsLevel + spread + 5) * point` exceed `targetTP` or `targetSL`, the bar is skipped to prevent label distortion.
      - **Non-Fatal Market Conditions (`[WARNING]`)**: If order placement fails due to normal market closures, disabled sessions, or invalid stops (`TRADE_RETCODE_MARKET_CLOSED`, `TRADE_RETCODE_OFFQUOTES`, `TRADE_RETCODE_PRICE_OFF`, `TRADE_RETCODE_TRADE_DISABLED`, `TRADE_RETCODE_INVALID_STOPS`), emits `[DMatrix-EA] [WARNING]` with full diagnostic prices/stops and skips the bar gracefully.
      - **Fatal Order Execution Failures (`[ERROR]`)**: If order placement fails due to genuine unexpected execution errors (e.g., account margin exhaustion, parameter errors), emits `[DMatrix-EA] [ERROR]` with retcode, deal, order ticket, description, and `GetLastError()`, triggering immediate pipeline abort.
   3. Registers successful position tickets (`DEAL_POSITION_ID`) and feature vectors into RAM via `COrderTracker::RegisterPosition()`.

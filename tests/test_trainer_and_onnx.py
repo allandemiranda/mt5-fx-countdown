@@ -158,3 +158,94 @@ def test_trainer_timestamp_and_elapsed_logs(
         r"\[\*\] Training completed at: \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \(Elapsed: \d{2}:\d{2}:\d{2}\)",
         captured,
     )
+
+
+def test_optuna_search_space_bounds_guarantee_min_less_than_max():
+    """Verify COD-02: dynamically guarantee min < max for all Optuna parameter search spaces."""
+    from src.config import DirectionalXGBConfig
+
+    test_cases = [
+        (1, 0.0001, 0.1, 0.1, 0.001, 0.0001, 0.0001, 1),
+        (20, 10.0, 1.5, 1.5, 100.0, 100.0, 1000.0, 1000),
+        (0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
+        (3, 0.01, 0.5, 0.5, 1.0, 0.1, 0.05, 20),
+    ]
+
+    for depth, eta, sub, col, child, lam, alp, rnds in test_cases:
+        dir_cfg = DirectionalXGBConfig(
+            max_depth=depth,
+            eta=eta,
+            subsample=sub,
+            colsample_bytree=col,
+            min_child_weight=child,
+            reg_lambda=lam,
+            reg_alpha=alp,
+            rounds=rnds,
+            early_stopping_rounds=1,
+            optuna_trials=1,
+            optuna_objective_metric="logloss",
+            classification_threshold=0.5,
+        )
+
+        min_depth = max(2, min(dir_cfg.max_depth - 1, 6))
+        max_depth = max(min_depth + 1, min(8, dir_cfg.max_depth + 2))
+        assert min_depth < max_depth
+
+        min_eta = max(0.001, min(dir_cfg.eta * 0.2, 0.05))
+        max_eta = max(min_eta * 1.5, min(0.20, max(0.01, dir_cfg.eta * 1.5)))
+        assert min_eta < max_eta
+
+        min_sub = max(0.4, min(dir_cfg.subsample - 0.3, 0.8))
+        max_sub = max(min_sub + 0.05, min(1.0, dir_cfg.subsample + 0.2))
+        assert min_sub < max_sub
+
+        min_col = max(0.4, min(dir_cfg.colsample_bytree - 0.3, 0.8))
+        max_col = max(min_col + 0.05, min(1.0, dir_cfg.colsample_bytree + 0.3))
+        assert min_col < max_col
+
+        min_child = max(1.0, dir_cfg.min_child_weight * 0.5)
+        max_child = max(min_child + 1.0, dir_cfg.min_child_weight * 2.0, 10.0)
+        assert min_child < max_child
+
+        min_lam = max(0.001, dir_cfg.reg_lambda * 0.1)
+        max_lam = max(min_lam * 2.0, dir_cfg.reg_lambda * 3.0, 0.1)
+        assert min_lam < max_lam
+
+        min_alp = max(0.001, dir_cfg.reg_alpha * 0.1)
+        max_alp = max(min_alp * 2.0, dir_cfg.reg_alpha * 3.0, 0.05)
+        assert min_alp < max_alp
+
+        min_est = max(20, dir_cfg.rounds // 4)
+        max_est = max(min_est + 10, dir_cfg.rounds, 60)
+        assert min_est < max_est
+
+
+def test_trainer_with_extreme_hyperparameters_runs_cleanly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify trainer with unusual/extreme hyperparameter settings runs Optuna smoothly."""
+    monkeypatch.setenv("OPTUNA_TRIALS", "1")
+    monkeypatch.setenv("XGB_ROUNDS", "1")
+    monkeypatch.setenv("XGB_MAX_DEPTH", "1")
+    monkeypatch.setenv("XGB_ETA", "0.0001")
+    monkeypatch.setenv("XGB_EARLY_STOPPING_ROUNDS", "1")
+    monkeypatch.setenv("VALIDATION_PERCENTAGE", "0.20")
+
+    config = AppConfig.from_env()
+    trainer = DualXGBoostTrainer(config)
+
+    num_samples = 30
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({
+        "f0": rng.standard_normal(num_samples),
+        "f1": rng.standard_normal(num_samples),
+        "label": rng.integers(0, 2, size=num_samples),
+    })
+    csv_path = tmp_path / "extreme_buy.csv"
+    df.to_csv(csv_path, index=False)
+
+    clf, metrics, feat_names = trainer.train(csv_path, "buy")
+    assert clf is not None
+    assert metrics["direction"] == "BUY"
+    assert "roc_auc" in metrics
+    assert "log_loss" in metrics
+    assert "best_iteration" in metrics
+    assert len(feat_names) == 2

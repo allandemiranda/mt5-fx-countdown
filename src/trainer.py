@@ -104,22 +104,22 @@ class DualXGBoostTrainer:
 
         def objective(trial: optuna.Trial) -> float:
             try:
-                min_depth = max(2, dir_cfg.max_depth - 1)
-                max_depth = min(8, dir_cfg.max_depth + 2)
-                min_eta = max(0.001, dir_cfg.eta * 0.2)
-                max_eta = min(0.10, max(0.01, dir_cfg.eta * 1.5))
-                min_sub = max(0.4, dir_cfg.subsample - 0.3)
-                max_sub = min(1.0, dir_cfg.subsample + 0.2)
-                min_col = max(0.4, dir_cfg.colsample_bytree - 0.3)
-                max_col = min(1.0, dir_cfg.colsample_bytree + 0.3)
+                min_depth = max(2, min(dir_cfg.max_depth - 1, 6))
+                max_depth = max(min_depth + 1, min(8, dir_cfg.max_depth + 2))
+                min_eta = max(0.001, min(dir_cfg.eta * 0.2, 0.05))
+                max_eta = max(min_eta * 1.5, min(0.20, max(0.01, dir_cfg.eta * 1.5)))
+                min_sub = max(0.4, min(dir_cfg.subsample - 0.3, 0.8))
+                max_sub = max(min_sub + 0.05, min(1.0, dir_cfg.subsample + 0.2))
+                min_col = max(0.4, min(dir_cfg.colsample_bytree - 0.3, 0.8))
+                max_col = max(min_col + 0.05, min(1.0, dir_cfg.colsample_bytree + 0.3))
                 min_child = max(1.0, dir_cfg.min_child_weight * 0.5)
-                max_child = max(10.0, dir_cfg.min_child_weight * 2.0)
+                max_child = max(min_child + 1.0, dir_cfg.min_child_weight * 2.0, 10.0)
                 min_lam = max(0.001, dir_cfg.reg_lambda * 0.1)
-                max_lam = max(0.1, dir_cfg.reg_lambda * 3.0)
+                max_lam = max(min_lam * 2.0, dir_cfg.reg_lambda * 3.0, 0.1)
                 min_alp = max(0.001, dir_cfg.reg_alpha * 0.1)
-                max_alp = max(0.05, dir_cfg.reg_alpha * 3.0)
+                max_alp = max(min_alp * 2.0, dir_cfg.reg_alpha * 3.0, 0.05)
                 min_est = max(20, dir_cfg.rounds // 4)
-                max_est = max(60, dir_cfg.rounds)
+                max_est = max(min_est + 10, dir_cfg.rounds, 60)
 
                 params = {
                     "tree_method": tree_method,

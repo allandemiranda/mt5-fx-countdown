@@ -236,9 +236,14 @@ bool IsTradeScheduleAllowed(const datetime barTime)
    int startSec = TimeStringToSeconds(startTimeStr);
    int endSec   = TimeStringToSeconds(endTimeStr);
    
-   // If endSec is 0 (00:00:00) or equal to startSec, full 24h allowed for this active day
-   if(endSec == 0 || endSec == startSec)
+   // FIN-02: Resolve midnight ambiguity (00:00:00)
+   // 1) 00:00:00 to 00:00:00 means full 24h trading allowed
+   if(startSec == 0 && endSec == 0)
       return true;
+      
+   // 2) startSec > 0 and endSec == 0 means trade from startSec until midnight / end of day (86400 seconds)
+   if(startSec > 0 && endSec == 0)
+      endSec = 86400;
       
    int barSec = dt.hour * 3600 + dt.min * 60 + dt.sec;
    
@@ -386,25 +391,39 @@ void OnTick()
       return;
    }
    
-   // 3. Extract the flattened vector of all active features across lookback
+   // 4. Extract the flattened vector of all active features across lookback
    vectorf featureVector;
    if(!g_featureExtractor.ExtractFlattenedVector(0, featureVector))
    {
       return;
    }
    
-   // 3. Setup Triple Barrier Price Levels (InpLabelMinPoints and InpLabelMaxAdversePoints)
-   double point      = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   int digits        = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   long stopsLevel   = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
-   long spread       = SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
-   double ask        = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   double bid        = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   // 5. Setup Triple Barrier Price Levels (InpLabelMinPoints and InpLabelMaxAdversePoints)
+   double point          = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   int digits            = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   long stopsLevel       = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+   long spread           = SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+   double ask            = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid            = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
-   double slDist     = MathMax((double)InpLabelMaxAdversePoints * point, (stopsLevel + spread + 5) * point);
-   double tpDist     = MathMax((double)InpLabelMinPoints * point, (stopsLevel + spread + 5) * point);
+   double minAllowedDist = (double)(stopsLevel + spread + 5) * point;
+   double targetTP       = (double)InpLabelMinPoints * point;
+   double targetSL       = (double)InpLabelMaxAdversePoints * point;
    
-   // 4. Open simultaneous BUY and SELL positions with Triple Barrier TP/SL
+   // FIN-01: Discard candidate bar if broker constraints exceed pure theoretical barrier targets
+   if(targetTP < minAllowedDist || targetSL < minAllowedDist)
+   {
+      PrintFormat("[DMatrix-EA] [WARNING] Bar %s skipped: broker minimum distance (%.*f) exceeds pure barrier target (TP: %.*f, SL: %.*f, StopsLevel: %d, Spread: %d). Skipping bar to prevent barrier distortion.",
+                  TimeToString(baseTimestamp, TIME_DATE|TIME_MINUTES), digits, minAllowedDist,
+                  digits, targetTP, digits, targetSL, (int)stopsLevel, (int)spread);
+      return;
+   }
+   
+   // Strictly use pure target distances without MathMax inflation
+   double slDist         = targetSL;
+   double tpDist         = targetTP;
+   
+   // 6. Open simultaneous BUY and SELL positions with Triple Barrier TP/SL
    // BUY Order: Execution at Ask, closes at Bid -> SL below Bid, TP above Ask
    double buySL      = NormalizeDouble(bid - slDist, digits);
    double buyTP      = NormalizeDouble(ask + tpDist, digits);

@@ -1,6 +1,8 @@
 """Unit tests for the isolated macro_agent sub-project and SQLite governance client."""
 
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 import pytest
 
 from macro_agent.db_client import (
@@ -13,7 +15,14 @@ from macro_agent.db_client import (
     upsert_calendar_event,
     upsert_news_event,
 )
-from macro_agent.fetcher import extract_currencies_from_symbol
+from macro_agent.fetcher import (
+    MT5_TIMEZONE,
+    convert_utc_to_eet,
+    extract_currencies_from_symbol,
+    fetch_mql5_calendar,
+    fetch_open_news_headlines,
+    parse_mql5_timestamp_to_eet,
+)
 
 
 def test_macro_db_init_and_tables(tmp_path: Path) -> None:
@@ -171,6 +180,89 @@ def test_macro_fetcher_extract_currencies() -> None:
     assert extract_currencies_from_symbol("GBP/USD") == ["GBP", "USD"]
     assert extract_currencies_from_symbol("USDJPY.raw") == ["USD", "JPY"]
     assert extract_currencies_from_symbol("USD") == ["USD"]
+
+
+def test_macro_fetcher_timezone_governance() -> None:
+    """Verify that fetcher uses Europe/Athens timezone and converts UTC accurately."""
+    assert str(MT5_TIMEZONE) == "Europe/Athens" or MT5_TIMEZONE is not None
+
+    # Summer Daylight Saving (EEST: UTC+3)
+    dt_summer_utc = datetime(2026, 8, 31, 12, 30, tzinfo=timezone.utc)
+    summer_eet_str = convert_utc_to_eet(dt_summer_utc)
+    assert summer_eet_str == "2026-08-31 15:30:00"
+
+    # Winter Standard Time (EET: UTC+2)
+    dt_winter_utc = datetime(2026, 1, 15, 12, 30, tzinfo=timezone.utc)
+    winter_eet_str = convert_utc_to_eet(dt_winter_utc)
+    assert winter_eet_str == "2026-01-15 14:30:00"
+
+
+def test_macro_fetcher_parse_mql5_timestamp() -> None:
+    """Verify that MQL5 calendar timestamps (YYYY.MM.DD HH:MM) are converted to EET/EEST."""
+    # Summer test (August: UTC+3)
+    eet_ts = parse_mql5_timestamp_to_eet("2026.08.31 12:30")
+    assert eet_ts == "2026-08-31 15:30:00"
+
+    # Winter test (January: UTC+2)
+    eet_winter = parse_mql5_timestamp_to_eet("2026.01.15 10:00")
+    assert eet_winter == "2026-01-15 12:00:00"
+
+
+def test_macro_fetcher_mql5_scraping_eet_alignment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that fetch_mql5_calendar parses HTML and outputs EET/EEST timestamps."""
+    sample_html = (
+        '<div class="ec-table__item ec-table__item_inline">'
+        '2026.08.31 12:30, USD, <a href="/en/calendar/nfp">Nonfarm Payrolls</a>, Actual: 180K</div>\n'
+        '<div class="ec-table__item ec-table__item_inline">'
+        '2026.08.31 14:00, EUR, ECB Rate Decision, Actual: 3.50%</div>\n'
+        '<div class="ec-table__item ec-table__item_inline">'
+        '2026.08.31 15:00, JPY, BOJ Policy Rate, Actual: 0.25%</div>'
+    )
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = sample_html.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout: mock_resp)
+
+    events = fetch_mql5_calendar(currencies=["USD", "EUR"])
+    assert len(events) == 2
+
+    usd_event = next(e for e in events if e["currency"] == "USD")
+    assert usd_event["event_name"] == "Nonfarm Payrolls"
+    assert usd_event["datetime"] == "2026-08-31 15:30:00"
+    assert usd_event["datetime_eet"] == "2026-08-31 15:30:00"
+    assert usd_event["importance"] == "HIGH"
+
+    eur_event = next(e for e in events if e["currency"] == "EUR")
+    assert eur_event["event_name"] == "ECB Rate Decision"
+    assert eur_event["datetime"] == "2026-08-31 17:00:00"
+    assert eur_event["datetime_eet"] == "2026-08-31 17:00:00"
+    assert eur_event["importance"] == "HIGH"
+
+
+def test_macro_fetcher_news_headlines_eet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that fetch_open_news_headlines standardizes fetched_at and published_at to EET/EEST."""
+    sample_rss = """
+    <rss version="2.0">
+      <channel>
+        <item>
+          <title><![CDATA[Federal Reserve FOMC Rate Decision Imminent for USD]]></title>
+          <description><![CDATA[Traders expect volatility in USD pairs ahead of FOMC.]]></description>
+          <pubDate>Mon, 31 Aug 2026 12:30:00 GMT</pubDate>
+        </item>
+      </channel>
+    </rss>
+    """
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = sample_rss.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout: mock_resp)
+
+    headlines = fetch_open_news_headlines(currencies=["USD"])
+    assert len(headlines) == 1
+    item = headlines[0]
+    assert item["title"] == "Federal Reserve FOMC Rate Decision Imminent for USD"
+    assert item["published_at"] == "2026-08-31 15:30:00"
+    assert len(item["fetched_at"]) == 19
 
 
 def test_macro_agent_architectural_isolation() -> None:

@@ -29,8 +29,25 @@ class PresetGenerator:
 
         # LiveONNX-only parameters fallback strictly to LiveONNX-EA.mq5 defaults when not in env
         trade_dir = os.getenv("INP_TRADE_DIRECTION", "0")
-        min_buy = os.getenv("INP_MINIMAL_LEVEL_ACCEPTED_BUY", "0.50")
-        min_sell = os.getenv("INP_MINIMAL_LEVEL_ACCEPTED_SELL", "0.50")
+        min_buy_env = os.getenv("INP_MINIMAL_LEVEL_ACCEPTED_BUY")
+        if min_buy_env is not None:
+            min_buy = min_buy_env
+        elif cfg.eval_buy_classification_threshold is not None:
+            min_buy = f"{cfg.eval_buy_classification_threshold:.2f}"
+        elif cfg.eval_classification_threshold is not None:
+            min_buy = f"{cfg.eval_classification_threshold:.2f}"
+        else:
+            min_buy = "0.50"
+
+        min_sell_env = os.getenv("INP_MINIMAL_LEVEL_ACCEPTED_SELL")
+        if min_sell_env is not None:
+            min_sell = min_sell_env
+        elif cfg.eval_sell_classification_threshold is not None:
+            min_sell = f"{cfg.eval_sell_classification_threshold:.2f}"
+        elif cfg.eval_classification_threshold is not None:
+            min_sell = f"{cfg.eval_classification_threshold:.2f}"
+        else:
+            min_sell = "0.50"
         lot_size = os.getenv("INP_LOT_SIZE", "0.01")
         enable_sr = os.getenv("INP_ENABLE_SR_SNAPPING", "1")
         sr_bars = os.getenv("INP_SR_LOOKBACK_BARS", "12")

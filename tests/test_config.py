@@ -427,3 +427,58 @@ def test_env_and_example_parity_and_no_liveonnx_only_keys():
     leaked_in_example = example_keys & liveonnx_only_keys
     assert not leaked_in_env, f".env contains LiveONNX-only keys: {leaked_in_env}"
     assert not leaked_in_example, f".env.example contains LiveONNX-only keys: {leaked_in_example}"
+
+
+def test_preset_generator_threshold_propagation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Verify PAR-01: PresetGenerator propagates thresholds from AppConfig and env."""
+    from src.preset_generator import PresetGenerator
+
+    # 1. Default config fallback to 0.50 (when directional thresholds are None)
+    monkeypatch.delenv("INP_MINIMAL_LEVEL_ACCEPTED_BUY", raising=False)
+    monkeypatch.delenv("INP_MINIMAL_LEVEL_ACCEPTED_SELL", raising=False)
+    monkeypatch.delenv("EVAL_BUY_CLASSIFICATION_THRESHOLD", raising=False)
+    monkeypatch.delenv("EVAL_SELL_CLASSIFICATION_THRESHOLD", raising=False)
+    monkeypatch.delenv("EVAL_CLASSIFICATION_THRESHOLD", raising=False)
+    config = AppConfig.from_env(load_env_file=False)
+    gen = PresetGenerator(config, tmp_path, tmp_path)
+    content = gen.build_live_preset_content()
+    assert "InpMinimalLevelAcceptedBuy=0.50" in content
+    assert "InpMinimalLevelAcceptedSell=0.50" in content
+
+    # 2. Global EVAL_CLASSIFICATION_THRESHOLD propagation
+    monkeypatch.setenv("EVAL_CLASSIFICATION_THRESHOLD", "0.55")
+    config_global = AppConfig.from_env(load_env_file=False)
+    gen_global = PresetGenerator(config_global, tmp_path, tmp_path)
+    content_global = gen_global.build_live_preset_content()
+    assert "InpMinimalLevelAcceptedBuy=0.55" in content_global
+    assert "InpMinimalLevelAcceptedSell=0.55" in content_global
+
+    # 3. Directional overrides propagation
+    monkeypatch.setenv("EVAL_BUY_CLASSIFICATION_THRESHOLD", "0.48")
+    monkeypatch.setenv("EVAL_SELL_CLASSIFICATION_THRESHOLD", "0.52")
+    config_dir = AppConfig.from_env(load_env_file=False)
+    gen_dir = PresetGenerator(config_dir, tmp_path, tmp_path)
+    content_dir = gen_dir.build_live_preset_content()
+    assert "InpMinimalLevelAcceptedBuy=0.48" in content_dir
+    assert "InpMinimalLevelAcceptedSell=0.52" in content_dir
+
+    # 4. Environment variable precedence
+    monkeypatch.setenv("INP_MINIMAL_LEVEL_ACCEPTED_BUY", "0.61")
+    monkeypatch.setenv("INP_MINIMAL_LEVEL_ACCEPTED_SELL", "0.62")
+    content_env = gen_dir.build_live_preset_content()
+    assert "InpMinimalLevelAcceptedBuy=0.61" in content_env
+    assert "InpMinimalLevelAcceptedSell=0.62" in content_env
+
+    # 5. Fallback to 0.50 when all thresholds in config are None
+    monkeypatch.delenv("INP_MINIMAL_LEVEL_ACCEPTED_BUY", raising=False)
+    monkeypatch.delenv("INP_MINIMAL_LEVEL_ACCEPTED_SELL", raising=False)
+    config_none = dataclasses.replace(
+        config,
+        eval_buy_classification_threshold=None,
+        eval_sell_classification_threshold=None,
+        eval_classification_threshold=None,
+    )
+    gen_none = PresetGenerator(config_none, tmp_path, tmp_path)
+    content_none = gen_none.build_live_preset_content()
+    assert "InpMinimalLevelAcceptedBuy=0.50" in content_none
+    assert "InpMinimalLevelAcceptedSell=0.50" in content_none

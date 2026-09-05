@@ -140,7 +140,6 @@ class DirectionalXGBConfig:
     classification_threshold: float
 
 
-
 @dataclass(frozen=True)
 class AppConfig:
     """Strictly typed configuration dataclass for the MLOps pipeline."""

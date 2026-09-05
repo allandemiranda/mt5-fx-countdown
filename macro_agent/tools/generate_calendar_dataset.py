@@ -141,7 +141,7 @@ def get_last_weekday_of_month(year: int, month: int, weekday: int) -> date:
 
 def generate_central_bank_events(start_date: date, end_date: date) -> List[CalendarEventRecord]:
     """Compile official Central Bank scheduled meetings and rate decisions.
-    
+
     Ex-ante Action: TRAILING_STOP (120 points).
     Blocks new entries and tightens stop loss on open profitable positions to lock in
     accrued equity before monetary policy statements and rate surprise shocks.
@@ -801,9 +801,9 @@ def main() -> None:
 
     print("=" * 80)
     print(f"[*] Generating Institutional Economic Calendar: {start_date} to {end_date}")
-    print(f"[*] Target Currencies: EUR, USD, JPY, GBP, AUD, CAD, CHF, NZD (8 G8 currencies)")
+    print("[*] Target Currencies: EUR, USD, JPY, GBP, AUD, CAD, CHF, NZD (8 G8 currencies)")
     print(f"[*] Destination Database: {target_db}")
-    print(f"[*] Timezone: MT5 Server Time (EET/EEST - Europe/Athens)")
+    print("[*] Timezone: MT5 Server Time (EET/EEST - Europe/Athens)")
     print("=" * 80)
 
     # 1. Generate Central Bank decisions (Action: TRAILING_STOP 120 pts)
@@ -812,7 +812,7 @@ def main() -> None:
 
     # 2. Generate Recurring Macroeconomic Catalysts (BREAKEVEN, BLOCK_ENTRIES, ADVISORY_ONLY)
     macro_events = generate_recurring_macro_events(start_date, end_date)
-    
+
     action_counts = {}
     for ev in cb_events + macro_events:
         action_counts[ev.action] = action_counts.get(ev.action, 0) + 1
