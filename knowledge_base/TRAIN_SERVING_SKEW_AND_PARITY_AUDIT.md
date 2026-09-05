@@ -419,6 +419,19 @@ $$\text{PSI}_j = \sum_{b=1}^B (Q_b - P_b) \times \ln\left(\frac{Q_b}{P_b}\right)
 - $\mathbf{0.10 \le \text{PSI} < 0.25}$: Moderate Shift (Advisory Alert).
 - $\mathbf{\text{PSI} \ge 0.25}$: Significant Covariate Shift (Trigger Automated Retraining).
 
+### 6.3 Directional XGBoost Asymmetry & Feature Schema Invariance Theorem
+
+**Theorem 3 (Directional Schema Invariance)**:  
+Let $\mathcal{M}_{\text{buy}}$ and $\mathcal{M}_{\text{sell}}$ be two independent gradient boosted decision tree classifiers trained with asymmetric hyperparameters $\Theta_{\text{buy}} \ne \Theta_{\text{sell}}$ (e.g. `XGB_BUY_MAX_DEPTH` $\ne$ `XGB_SELL_MAX_DEPTH`, `XGB_BUY_ALPHA` $\ne$ `XGB_SELL_ALPHA`, `OPTUNA_BUY_OBJECTIVE_METRIC` $\ne$ `OPTUNA_SELL_OBJECTIVE_METRIC`).  
+As long as the input tensor feature dimension $D = \dim(\Phi(\tau_k))$ is identical for both models ($D = D_{\text{active}}$), zero train-serving skew is preserved across inference:
+
+$$\dim(\mathbf{x}_{\text{buy}}) = \dim(\mathbf{x}_{\text{sell}}) = D \implies \text{OnnxRun}(\mathcal{M}_{\text{buy}}, \mathbf{x}_t) \in [0, 1]^2 \land \text{OnnxRun}(\mathcal{M}_{\text{sell}}, \mathbf{x}_t) \in [0, 1]^2$$
+
+**Institutional Proof**:  
+1. In `CFeatureExtractor.mqh`, the function `ExtractFlattenedVector(0, features)` generates a unified, 1D sequential vector of length $D = 130$ without conditioning on trade direction.
+2. The flat ONNX graphs compiled by `src/onnx_exporter.py` specify input tensor shape `[None, D]` and output shape `[None, 2]` for both BUY and SELL.
+3. Therefore, varying tree depth, learning rate, L1/L2 shrinkage penalties, or decision thresholds between directions provides quantitative flexibility for market asymmetry (orderly bullish rallies vs explosive bearish selloffs) with zero risk of schema skew or memory misalignment in MT5 runtime. $\blacksquare$
+
 ---
 
 ## 7. Deep Code Audit: Verification of Parity & Absence of Leakage

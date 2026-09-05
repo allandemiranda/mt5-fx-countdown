@@ -90,6 +90,57 @@ def _get_optional_env(key: str, default: str, env_dict: Dict[str, str] | None = 
     return val.strip()
 
 
+def _get_optional_nullable_int(key: str, env_dict: Dict[str, str] | None = None) -> int | None:
+    """Retrieve and parse an optional nullable integer environment variable."""
+    val = env_dict.get(key) if env_dict is not None else os.getenv(key)
+    if val is None or val.strip() == "":
+        return None
+    val_str = val.strip()
+    try:
+        return int(val_str)
+    except ValueError as exc:
+        raise ValueError(f"Configuration parameter '{key}' must be a valid integer, got '{val_str}'.") from exc
+
+
+def _get_optional_nullable_float(key: str, env_dict: Dict[str, str] | None = None) -> float | None:
+    """Retrieve and parse an optional nullable float environment variable."""
+    val = env_dict.get(key) if env_dict is not None else os.getenv(key)
+    if val is None or val.strip() == "":
+        return None
+    val_str = val.strip()
+    try:
+        return float(val_str)
+    except ValueError as exc:
+        raise ValueError(f"Configuration parameter '{key}' must be a valid float, got '{val_str}'.") from exc
+
+
+def _get_optional_nullable_str(key: str, env_dict: Dict[str, str] | None = None) -> str | None:
+    """Retrieve an optional nullable string environment variable."""
+    val = env_dict.get(key) if env_dict is not None else os.getenv(key)
+    if val is None or val.strip() == "":
+        return None
+    return val.strip()
+
+
+@dataclass(frozen=True)
+class DirectionalXGBConfig:
+    """XGBoost and evaluation configuration for a specific trade direction (BUY or SELL)."""
+
+    max_depth: int
+    eta: float
+    subsample: float
+    colsample_bytree: float
+    min_child_weight: float
+    reg_lambda: float
+    reg_alpha: float
+    rounds: int
+    early_stopping_rounds: int
+    optuna_trials: int
+    optuna_objective_metric: str
+    classification_threshold: float
+
+
+
 @dataclass(frozen=True)
 class AppConfig:
     """Strictly typed configuration dataclass for the MLOps pipeline."""
@@ -206,6 +257,109 @@ class AppConfig:
     stoch_slowing: int
     stoch_method: int
     stoch_price_field: int
+
+    # 8. Directional XGBoost & Optuna Overrides (Optional with fallback to global settings)
+    xgb_buy_max_depth: int | None = None
+    xgb_buy_eta: float | None = None
+    xgb_buy_subsample: float | None = None
+    xgb_buy_colsample_bytree: float | None = None
+    xgb_buy_min_child_weight: float | None = None
+    xgb_buy_lambda: float | None = None
+    xgb_buy_alpha: float | None = None
+    xgb_buy_rounds: int | None = None
+    xgb_buy_early_stopping_rounds: int | None = None
+    optuna_buy_trials: int | None = None
+    optuna_buy_objective_metric: str | None = None
+    eval_buy_classification_threshold: float | None = None
+
+    xgb_sell_max_depth: int | None = None
+    xgb_sell_eta: float | None = None
+    xgb_sell_subsample: float | None = None
+    xgb_sell_colsample_bytree: float | None = None
+    xgb_sell_min_child_weight: float | None = None
+    xgb_sell_lambda: float | None = None
+    xgb_sell_alpha: float | None = None
+    xgb_sell_rounds: int | None = None
+    xgb_sell_early_stopping_rounds: int | None = None
+    optuna_sell_trials: int | None = None
+    optuna_sell_objective_metric: str | None = None
+    eval_sell_classification_threshold: float | None = None
+
+    def get_directional_config(self, direction: str) -> DirectionalXGBConfig:
+        """Resolve directional XGBoost and evaluation configuration with transparent fallback to global settings."""
+        dir_clean = direction.lower().strip()
+        if dir_clean == "buy":
+            return DirectionalXGBConfig(
+                max_depth=self.xgb_buy_max_depth if self.xgb_buy_max_depth is not None else self.xgb_max_depth,
+                eta=self.xgb_buy_eta if self.xgb_buy_eta is not None else self.xgb_eta,
+                subsample=self.xgb_buy_subsample if self.xgb_buy_subsample is not None else self.xgb_subsample,
+                colsample_bytree=(
+                    self.xgb_buy_colsample_bytree
+                    if self.xgb_buy_colsample_bytree is not None
+                    else self.xgb_colsample_bytree
+                ),
+                min_child_weight=(
+                    self.xgb_buy_min_child_weight
+                    if self.xgb_buy_min_child_weight is not None
+                    else self.xgb_min_child_weight
+                ),
+                reg_lambda=self.xgb_buy_lambda if self.xgb_buy_lambda is not None else self.xgb_lambda,
+                reg_alpha=self.xgb_buy_alpha if self.xgb_buy_alpha is not None else self.xgb_alpha,
+                rounds=self.xgb_buy_rounds if self.xgb_buy_rounds is not None else self.xgb_rounds,
+                early_stopping_rounds=(
+                    self.xgb_buy_early_stopping_rounds
+                    if self.xgb_buy_early_stopping_rounds is not None
+                    else self.xgb_early_stopping_rounds
+                ),
+                optuna_trials=self.optuna_buy_trials if self.optuna_buy_trials is not None else self.optuna_trials,
+                optuna_objective_metric=(
+                    self.optuna_buy_objective_metric
+                    if self.optuna_buy_objective_metric is not None
+                    else self.optuna_objective_metric
+                ),
+                classification_threshold=(
+                    self.eval_buy_classification_threshold
+                    if self.eval_buy_classification_threshold is not None
+                    else self.eval_classification_threshold
+                ),
+            )
+        elif dir_clean == "sell":
+            return DirectionalXGBConfig(
+                max_depth=self.xgb_sell_max_depth if self.xgb_sell_max_depth is not None else self.xgb_max_depth,
+                eta=self.xgb_sell_eta if self.xgb_sell_eta is not None else self.xgb_eta,
+                subsample=self.xgb_sell_subsample if self.xgb_sell_subsample is not None else self.xgb_subsample,
+                colsample_bytree=(
+                    self.xgb_sell_colsample_bytree
+                    if self.xgb_sell_colsample_bytree is not None
+                    else self.xgb_colsample_bytree
+                ),
+                min_child_weight=(
+                    self.xgb_sell_min_child_weight
+                    if self.xgb_sell_min_child_weight is not None
+                    else self.xgb_min_child_weight
+                ),
+                reg_lambda=self.xgb_sell_lambda if self.xgb_sell_lambda is not None else self.xgb_lambda,
+                reg_alpha=self.xgb_sell_alpha if self.xgb_sell_alpha is not None else self.xgb_alpha,
+                rounds=self.xgb_sell_rounds if self.xgb_sell_rounds is not None else self.xgb_rounds,
+                early_stopping_rounds=(
+                    self.xgb_sell_early_stopping_rounds
+                    if self.xgb_sell_early_stopping_rounds is not None
+                    else self.xgb_early_stopping_rounds
+                ),
+                optuna_trials=self.optuna_sell_trials if self.optuna_sell_trials is not None else self.optuna_trials,
+                optuna_objective_metric=(
+                    self.optuna_sell_objective_metric
+                    if self.optuna_sell_objective_metric is not None
+                    else self.optuna_objective_metric
+                ),
+                classification_threshold=(
+                    self.eval_sell_classification_threshold
+                    if self.eval_sell_classification_threshold is not None
+                    else self.eval_classification_threshold
+                ),
+            )
+        else:
+            raise ValueError(f"Invalid direction '{direction}'. Expected 'buy' or 'sell'.")
 
     @property
     def clean_timeframe(self) -> str:
@@ -411,6 +565,33 @@ class AppConfig:
             stoch_slowing=_get_required_int("STOCH_SLOWING"),
             stoch_method=_get_required_int("STOCH_METHOD"),
             stoch_price_field=_get_required_int("STOCH_PRICE_FIELD"),
+
+            # 8. Directional XGBoost & Optuna Overrides (Optional with fallback to global settings)
+            xgb_buy_max_depth=_get_optional_nullable_int("XGB_BUY_MAX_DEPTH"),
+            xgb_buy_eta=_get_optional_nullable_float("XGB_BUY_ETA"),
+            xgb_buy_subsample=_get_optional_nullable_float("XGB_BUY_SUBSAMPLE"),
+            xgb_buy_colsample_bytree=_get_optional_nullable_float("XGB_BUY_COLSAMPLE_BYTREE"),
+            xgb_buy_min_child_weight=_get_optional_nullable_float("XGB_BUY_MIN_CHILD_WEIGHT"),
+            xgb_buy_lambda=_get_optional_nullable_float("XGB_BUY_LAMBDA"),
+            xgb_buy_alpha=_get_optional_nullable_float("XGB_BUY_ALPHA"),
+            xgb_buy_rounds=_get_optional_nullable_int("XGB_BUY_ROUNDS"),
+            xgb_buy_early_stopping_rounds=_get_optional_nullable_int("XGB_BUY_EARLY_STOPPING_ROUNDS"),
+            optuna_buy_trials=_get_optional_nullable_int("OPTUNA_BUY_TRIALS"),
+            optuna_buy_objective_metric=_get_optional_nullable_str("OPTUNA_BUY_OBJECTIVE_METRIC"),
+            eval_buy_classification_threshold=_get_optional_nullable_float("EVAL_BUY_CLASSIFICATION_THRESHOLD"),
+
+            xgb_sell_max_depth=_get_optional_nullable_int("XGB_SELL_MAX_DEPTH"),
+            xgb_sell_eta=_get_optional_nullable_float("XGB_SELL_ETA"),
+            xgb_sell_subsample=_get_optional_nullable_float("XGB_SELL_SUBSAMPLE"),
+            xgb_sell_colsample_bytree=_get_optional_nullable_float("XGB_SELL_COLSAMPLE_BYTREE"),
+            xgb_sell_min_child_weight=_get_optional_nullable_float("XGB_SELL_MIN_CHILD_WEIGHT"),
+            xgb_sell_lambda=_get_optional_nullable_float("XGB_SELL_LAMBDA"),
+            xgb_sell_alpha=_get_optional_nullable_float("XGB_SELL_ALPHA"),
+            xgb_sell_rounds=_get_optional_nullable_int("XGB_SELL_ROUNDS"),
+            xgb_sell_early_stopping_rounds=_get_optional_nullable_int("XGB_SELL_EARLY_STOPPING_ROUNDS"),
+            optuna_sell_trials=_get_optional_nullable_int("OPTUNA_SELL_TRIALS"),
+            optuna_sell_objective_metric=_get_optional_nullable_str("OPTUNA_SELL_OBJECTIVE_METRIC"),
+            eval_sell_classification_threshold=_get_optional_nullable_float("EVAL_SELL_CLASSIFICATION_THRESHOLD"),
         )
 
         if not (0.0 < cfg.garch_alpha + cfg.garch_beta < 1.0):

@@ -281,21 +281,25 @@ All hyperparameter tuning and early stopping decisions are computed exclusively 
 
 ### 4.3 Optuna Bayesian Optimization Engine & Trial Logs
 
-Hyperparameter optimization is executed via Optuna ([Akiba et al., 2019](https://doi.org/10.1145/3292500.3330701)) using Tree-structured Parzen Estimators (TPE).
+Hyperparameter optimization is executed via Optuna ([Akiba et al., 2019](https://doi.org/10.1145/3292500.3330701)) using Tree-structured Parzen Estimators (TPE), parameterized directionally through `DirectionalXGBConfig` (`config.get_directional_config(direction)`):
 
 ```python
-# Regularization and Tree Parameter Search Space
-min_depth = max(2, config.xgb_max_depth - 1)
-max_depth = min(6, config.xgb_max_depth + 2)      # Enforces shallow trees (anti-overfitting)
+# Directional Regularization and Tree Parameter Search Space
+dir_cfg = config.get_directional_config(direction)
+min_depth = max(2, dir_cfg.max_depth - 1)
+max_depth = min(8, dir_cfg.max_depth + 2)
 learning_rate = trial.suggest_float("learning_rate", min_eta, max_eta, log=True)
-subsample = trial.suggest_float("subsample", 0.4, 1.0)
-colsample_bytree = trial.suggest_float("colsample_bytree", 0.4, 1.0)
-reg_lambda = trial.suggest_float("reg_lambda", 0.01, 50.0) # L2 Regularization
-reg_alpha = trial.suggest_float("reg_alpha", 0.05, 25.0)   # L1 Regularization (Sparsity)
+subsample = trial.suggest_float("subsample", min_sub, max_sub)
+colsample_bytree = trial.suggest_float("colsample_bytree", min_col, max_col)
+reg_lambda = trial.suggest_float("reg_lambda", min_lam, max_lam) # Proportional L2
+reg_alpha = trial.suggest_float("reg_alpha", min_alp, max_alp)   # Proportional L1
 ```
 
-**Optimization Objective**: Minimize out-of-sample logarithmic loss:
-$$\mathcal{L}_{\text{logloss}}(\mathcal{D}_{\text{val}}) = -\frac{1}{N_{\text{val}}} \sum_{i=1}^{N_{\text{val}}} \Big[ y_i \ln(\hat{p}_i) + (1 - y_i) \ln(1 - \hat{p}_i) \Big]$$
+**Optimization Objective**: Minimize out-of-sample loss configured directionally (`OPTUNA_BUY_OBJECTIVE_METRIC` / `OPTUNA_SELL_OBJECTIVE_METRIC`):
+- `logloss`: $-\frac{1}{N_{\text{val}}} \sum_{i=1}^{N_{\text{val}}} [ y_i \ln(\hat{p}_i) + (1 - y_i) \ln(1 - \hat{p}_i) ]$
+- `roc_auc`: $1.0 - \text{ROC\_AUC}$
+- `precision`: $1.0 - \text{Precision}(\tau_{\text{dir}})$
+- `f1`: $1.0 - \text{F1}(\tau_{\text{dir}})$
 
 ### 4.4 Booster Evaluation Metrics
 

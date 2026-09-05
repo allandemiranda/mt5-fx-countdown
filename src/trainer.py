@@ -96,28 +96,30 @@ class DualXGBoostTrainer:
 
         tree_method, device = self._detect_accelerator()
 
+        dir_cfg = self.config.get_directional_config(direction)
+        optuna_metric = dir_cfg.optuna_objective_metric.lower()
+
         # Optuna Bayesian Hyperparameter Optimization
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-        optuna_metric = self.config.optuna_objective_metric.lower()
-
         def objective(trial: optuna.Trial) -> float:
             try:
-                min_depth = max(2, self.config.xgb_max_depth - 1)
-                max_depth = min(6, self.config.xgb_max_depth + 2)
-                min_eta = max(0.001, self.config.xgb_eta * 0.2)
-                max_eta = min(0.05, max(0.01, self.config.xgb_eta * 1.5))
-                min_sub = max(0.4, self.config.xgb_subsample - 0.3)
-                max_sub = min(1.0, self.config.xgb_subsample + 0.2)
-                min_col = max(0.4, self.config.xgb_colsample_bytree - 0.3)
-                max_col = min(1.0, self.config.xgb_colsample_bytree + 0.3)
-                min_child = max(1.0, self.config.xgb_min_child_weight * 0.5)
-                max_child = max(10.0, self.config.xgb_min_child_weight * 2.0)
-                min_lam = max(0.01, self.config.xgb_lambda * 0.2)
-                max_lam = max(10.0, self.config.xgb_lambda * 5.0)
-                max_alp = max(5.0, self.config.xgb_alpha * 5.0)
-                min_est = max(20, self.config.xgb_rounds // 4)
-                max_est = max(60, self.config.xgb_rounds)
+                min_depth = max(2, dir_cfg.max_depth - 1)
+                max_depth = min(8, dir_cfg.max_depth + 2)
+                min_eta = max(0.001, dir_cfg.eta * 0.2)
+                max_eta = min(0.10, max(0.01, dir_cfg.eta * 1.5))
+                min_sub = max(0.4, dir_cfg.subsample - 0.3)
+                max_sub = min(1.0, dir_cfg.subsample + 0.2)
+                min_col = max(0.4, dir_cfg.colsample_bytree - 0.3)
+                max_col = min(1.0, dir_cfg.colsample_bytree + 0.3)
+                min_child = max(1.0, dir_cfg.min_child_weight * 0.5)
+                max_child = max(10.0, dir_cfg.min_child_weight * 2.0)
+                min_lam = max(0.001, dir_cfg.reg_lambda * 0.1)
+                max_lam = max(0.1, dir_cfg.reg_lambda * 3.0)
+                min_alp = max(0.001, dir_cfg.reg_alpha * 0.1)
+                max_alp = max(0.05, dir_cfg.reg_alpha * 3.0)
+                min_est = max(20, dir_cfg.rounds // 4)
+                max_est = max(60, dir_cfg.rounds)
 
                 params = {
                     "tree_method": tree_method,
@@ -128,9 +130,9 @@ class DualXGBoostTrainer:
                     "colsample_bytree": trial.suggest_float("colsample_bytree", min_col, max_col),
                     "min_child_weight": trial.suggest_float("min_child_weight", min_child, max_child),
                     "reg_lambda": trial.suggest_float("reg_lambda", min_lam, max_lam),
-                    "reg_alpha": trial.suggest_float("reg_alpha", 0.05, max_alp),
+                    "reg_alpha": trial.suggest_float("reg_alpha", min_alp, max_alp),
                     "n_estimators": trial.suggest_int("n_estimators", min_est, max_est),
-                    "early_stopping_rounds": self.config.xgb_early_stopping_rounds,
+                    "early_stopping_rounds": dir_cfg.early_stopping_rounds,
                     "objective": OBJECTIVE_BINARY_LOGISTIC,
                     "eval_metric": "logloss",
                     "random_state": 42,
@@ -147,10 +149,10 @@ class DualXGBoostTrainer:
                     except ValueError:
                         return 1.0
                 elif optuna_metric == "precision":
-                    pred_labels = (preds >= self.config.eval_classification_threshold).astype(int)
+                    pred_labels = (preds >= dir_cfg.classification_threshold).astype(int)
                     return float(1.0 - precision_score(y_val, pred_labels, zero_division=0))
                 elif optuna_metric == "f1":
-                    pred_labels = (preds >= self.config.eval_classification_threshold).astype(int)
+                    pred_labels = (preds >= dir_cfg.classification_threshold).astype(int)
                     return float(1.0 - f1_score(y_val, pred_labels, zero_division=0))
                 else:
                     return float(log_loss(y_val, preds, labels=[0, 1]))
@@ -162,9 +164,9 @@ class DualXGBoostTrainer:
         optuna_jobs = 1 if device == "cuda" else -1
         print(
             f"    [*] Starting Hyperparameter Optimization "
-            f"({self.config.optuna_trials} trials, Objective: {optuna_metric.upper()})..."
+            f"({dir_cfg.optuna_trials} trials, Objective: {optuna_metric.upper()})..."
         )
-        study.optimize(objective, n_trials=self.config.optuna_trials, n_jobs=optuna_jobs)
+        study.optimize(objective, n_trials=dir_cfg.optuna_trials, n_jobs=optuna_jobs)
 
         print(f"    [+] Best Params for {dir_upper}: {study.best_params}")
 
@@ -174,7 +176,7 @@ class DualXGBoostTrainer:
         final_params["device"] = device
         final_params["objective"] = OBJECTIVE_BINARY_LOGISTIC
         final_params["eval_metric"] = "logloss"
-        final_params["early_stopping_rounds"] = self.config.xgb_early_stopping_rounds
+        final_params["early_stopping_rounds"] = dir_cfg.early_stopping_rounds
         final_params["random_state"] = 42
 
         clf = xgb.XGBClassifier(**final_params)
@@ -183,7 +185,7 @@ class DualXGBoostTrainer:
         val_preds_prob = clf.predict_proba(x_val)[:, 1]
 
         # Calculate Validation Metrics at User-Configured Decision Threshold
-        target_thresh = self.config.eval_classification_threshold
+        target_thresh = dir_cfg.classification_threshold
         val_pred_labels = (val_preds_prob >= target_thresh).astype(int)
 
         try:

@@ -52,13 +52,13 @@ mt5-fx-countdown/
 │       └── LiveONNX-EA.mq5                    # Live trading EA with native ONNX, consecutive signals & opposing defense
 ├── src/
 │   ├── cleaner.py                             # Atomic scoped cleaner for symbol/timeframe artifacts
-│   ├── config.py                              # Strictly typed dataclass configuration loader (95 parameters)
+│   ├── config.py                              # Strictly typed dataclass configuration loader (DirectionalXGBConfig & AppConfig)
 │   ├── dataset_manager.py                     # Dataset discovery, validation, and metadata management
 │   ├── mt5_client.py                          # MT5 API client, compiler, and tester runner
 │   ├── onnx_exporter.py                       # Pure 1D float ONNX exporter (No ZipMap) & deployer
 │   ├── preset_generator.py                    # Native MT5 .set preset file generator
 │   ├── template_generator.py                  # MT5 chart template (.tpl) generator
-│   ├── trainer.py                             # Dual XGBoost trainer with Optuna, directional metrics & sensitivity grid
+│   ├── trainer.py                             # Dual XGBoost trainer with Optuna, directional decoupling & sensitivity grid
 │   └── tools/
 │       └── macro_calendar.py                  # Macroeconomic calendar diagnostic utility
 ├── docs/
@@ -75,7 +75,7 @@ mt5-fx-countdown/
 │   ├── FMEA_AND_RESILIENCE_ENGINEERING.md     # Failure Mode & Effects Analysis (IEC 60812), FTA & fault tolerance
 │   ├── CODE_COMPLEXITY_AND_ARCHITECTURAL_METRICS.md # McCabe, Halstead, MI, and coupling metrics across MQL5 and Python
 │   └── FORMAL_VERIFICATION_AND_STATE_SPACE.md # Formal FSM models, Hoare safety proofs, and 111-parameter BVA matrix
-└── tests/                                     # Automated test suite (157 unit & integration tests)
+└── tests/                                     # Automated test suite (168 unit & integration tests)
 ```
 
 ---

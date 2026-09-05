@@ -82,6 +82,9 @@ All 80 user-configurable parameters supported by the pipeline:
 | | `EVAL_THRESHOLD_MIN` | `float` | `0.40` | Minimum threshold for parametric evaluation grid |
 | | `EVAL_THRESHOLD_MAX` | `float` | `0.70` | Maximum threshold for parametric evaluation grid |
 | | `EVAL_THRESHOLD_STEP` | `float` | `0.02` | Step increment for parametric evaluation grid |
+| **Directional Overrides (Optional)** | `XGB_BUY_*` / `XGB_SELL_*` | `int/float` | *(Global fallback)* | Independent tree depth, learning rate, subsample, regularization, rounds, and early stopping |
+| | `OPTUNA_BUY_*` / `OPTUNA_SELL_*` | `int/str` | *(Global fallback)* | Directional Bayesian optimization trials and objective metric (`logloss`, `roc_auc`, `precision`, `f1`) |
+| | `EVAL_BUY_CLASSIFICATION_THRESHOLD` / `EVAL_SELL_*` | `float` | *(Global fallback)* | Directional decision cutoff threshold for validation metrics |
 | **Feature Toggles**| `USE_ADX` .. `USE_SPREAD` | `bool` | `1/0` | Toggles for technical indicators |
 | | `USE_GARCH_FEATURES` | `bool` | `1` | Include GARCH volatility features ($\omega, \text{vol\_ratio}, \text{vol\_trend}, \sigma_{\text{cond}}, \sigma_{\text{agg}}$) in dataset |
 | **GARCH & Indicators** | `GARCH_HORIZON` | `int` | `8` | Forecast horizon in bars $[t+1..t+H]$ for volatility aggregation |

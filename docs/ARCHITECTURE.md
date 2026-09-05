@@ -247,27 +247,35 @@ flowchart TD
     FINAL_FIT --> METRICS["Compute Metrics (ROC-AUC, Accuracy, Log-Loss)"]
 ```
 
-### 5.1 Chronological Time-Series Validation Split
+### 5.2 Directional XGBoost Decoupling & Hyperparameter Asymmetry
+Because currency appreciation and depreciation follow structurally asymmetric market microstructure regimes (steady drift vs explosive drawdown volatility), the pipeline supports independent directional hyperparameter optimization via `DirectionalXGBConfig` ([`src/config.py`](../src/config.py)):
+- **Asymmetric Tree Architecture**: `XGB_BUY_MAX_DEPTH` vs `XGB_SELL_MAX_DEPTH`, `XGB_BUY_ETA` vs `XGB_SELL_ETA`, `XGB_BUY_ALPHA` vs `XGB_SELL_ALPHA`, `XGB_BUY_LAMBDA` vs `XGB_SELL_LAMBDA`.
+- **Directional Optuna Objectives**: `OPTUNA_BUY_OBJECTIVE_METRIC` and `OPTUNA_SELL_OBJECTIVE_METRIC` allow targeting different objective metrics (e.g., `roc_auc` for general ranking vs `precision` for high-confidence filters).
+- **Directional Cutoffs**: `EVAL_BUY_CLASSIFICATION_THRESHOLD` and `EVAL_SELL_CLASSIFICATION_THRESHOLD` calibrate out-of-sample metrics at directional decision thresholds $\tau_{\text{buy}}$ and $\tau_{\text{sell}}$.
+- **Schema Parity Invariant**: Decoupling hyperparameters strictly maintains identical input tensor dimensions (e.g. 130 features) and flat ONNX graphs (`[None, 130] -> [None, 2]`), guaranteeing Zero Train-Serving Skew.
+
+### 5.3 Chronological Time-Series Validation Split
 To prevent **lookahead bias and data leakage**:
 $$N_{\text{val}} = \lfloor N_{\text{total}} \times \text{VALIDATION\_PERCENTAGE} \rfloor$$
 $$N_{\text{train}} = N_{\text{total}} - N_{\text{val}}$$
 $$\mathcal{D}_{\text{train}} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N_{\text{train}}}, \quad \mathcal{D}_{\text{val}} = \{(\mathbf{x}_i, y_i)\}_{i=N_{\text{train}}+1}^{N_{\text{total}}}$$
 
-### 5.2 Optuna Bayesian Optimization Objective
-The objective function minimizes binary cross-entropy (logarithmic loss) on the out-of-sample validation fold:
+### 5.4 Optuna Bayesian Optimization Objective
+The objective function minimizes validation loss according to the configured directional metric (defaulting to binary logarithmic loss):
 $$\mathcal{L}_{\text{logloss}}(\mathcal{D}_{\text{val}}) = -\frac{1}{N_{\text{val}}}\sum_{i=1}^{N_{\text{val}}} \Big[ y_i \ln(\hat{p}_i) + (1 - y_i) \ln(1 - \hat{p}_i) \Big]$$
 
-### 5.3 Early Stopping Regularization
+### 5.5 Early Stopping Regularization
 To prevent overfitting on noisy financial regimes:
 - `eval_metric = "logloss"`
-- `early_stopping_rounds = XGB_EARLY_STOPPING_ROUNDS`
+- `early_stopping_rounds = dir_cfg.early_stopping_rounds`
 - Training halts when validation log-loss fails to improve for $E$ consecutive boosting iterations, preserving the optimal tree count `best_iteration`.
 
-### 5.4 Training Execution Logging & Telemetry
+### 5.6 Training Execution Logging, Parametric Sensitivity Grid & Telemetry
 To ensure transparency and operational monitoring during long-running model fits and Bayesian optimization routines:
 - **Start Timestamping**: Emits local system timestamp (`[YYYY-MM-DD HH:MM:SS]`) at the onset of dataset loading and Optuna trial initialization.
 - **Completion Timestamping & Wall-Clock Duration**: Tracks end-to-end training time via `(end_time - start_time).total_seconds()`, formatted as `(Elapsed: HH:MM:SS)`.
-- **Validation Metric Summaries**: Evaluates and outputs test-set `ROC-AUC`, `Accuracy`, `LogLoss`, and `best_iteration` prior to returning model handles to the pipeline orchestrator.
+- **Validation Metric Summaries**: Evaluates and outputs test-set `ROC-AUC`, `Accuracy`, `LogLoss`, `Precision`, `Recall`, `F1-Score`, and `best_iteration` at the configured directional threshold.
+- **Parametric Sensitivity Grid**: When `EVAL_ENABLE_THRESHOLD_GRID=1`, prints a systematic sweep across $\Theta \in [\theta_{\min}, \theta_{\max}]$ displaying Signal Count, Frequency (%), Precision, Recall, and F1.
 
 ---
 

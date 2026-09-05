@@ -6,7 +6,7 @@ import dataclasses
 from pathlib import Path
 
 import pytest
-from src.config import AppConfig
+from src.config import AppConfig, DirectionalXGBConfig
 
 
 @pytest.fixture(autouse=True)
@@ -266,6 +266,79 @@ def test_eval_metrics_and_grid_validation(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("EVAL_THRESHOLD_STEP", "0.0")
     with pytest.raises(ValueError, match="must be strictly positive"):
         AppConfig.from_env(load_env_file=False)
+
+
+def test_directional_xgb_config_and_fallback(monkeypatch: pytest.MonkeyPatch):
+    """Verify get_directional_config returns transparent fallbacks or directional overrides."""
+    # 1. Base config without directional overrides (must fallback to global settings)
+    all_directional_keys = [
+        "XGB_BUY_MAX_DEPTH", "XGB_BUY_ETA", "XGB_BUY_SUBSAMPLE", "XGB_BUY_COLSAMPLE_BYTREE",
+        "XGB_BUY_MIN_CHILD_WEIGHT", "XGB_BUY_LAMBDA", "XGB_BUY_ALPHA", "XGB_BUY_ROUNDS",
+        "XGB_BUY_EARLY_STOPPING_ROUNDS", "OPTUNA_BUY_TRIALS", "OPTUNA_BUY_OBJECTIVE_METRIC",
+        "EVAL_BUY_CLASSIFICATION_THRESHOLD",
+        "XGB_SELL_MAX_DEPTH", "XGB_SELL_ETA", "XGB_SELL_SUBSAMPLE", "XGB_SELL_COLSAMPLE_BYTREE",
+        "XGB_SELL_MIN_CHILD_WEIGHT", "XGB_SELL_LAMBDA", "XGB_SELL_ALPHA", "XGB_SELL_ROUNDS",
+        "XGB_SELL_EARLY_STOPPING_ROUNDS", "OPTUNA_SELL_TRIALS", "OPTUNA_SELL_OBJECTIVE_METRIC",
+        "EVAL_SELL_CLASSIFICATION_THRESHOLD",
+    ]
+    for k in all_directional_keys:
+        monkeypatch.delenv(k, raising=False)
+
+    config = AppConfig.from_env(load_env_file=False)
+
+    buy_cfg = config.get_directional_config("buy")
+    sell_cfg = config.get_directional_config("SELL")
+
+    assert isinstance(buy_cfg, DirectionalXGBConfig)
+    assert isinstance(sell_cfg, DirectionalXGBConfig)
+
+    # Validate fallbacks match global AppConfig
+    assert buy_cfg.max_depth == config.xgb_max_depth
+    assert buy_cfg.eta == config.xgb_eta
+    assert buy_cfg.subsample == config.xgb_subsample
+    assert buy_cfg.colsample_bytree == config.xgb_colsample_bytree
+    assert buy_cfg.min_child_weight == config.xgb_min_child_weight
+    assert buy_cfg.reg_lambda == config.xgb_lambda
+    assert buy_cfg.reg_alpha == config.xgb_alpha
+    assert buy_cfg.rounds == config.xgb_rounds
+    assert buy_cfg.early_stopping_rounds == config.xgb_early_stopping_rounds
+    assert buy_cfg.optuna_trials == config.optuna_trials
+    assert buy_cfg.optuna_objective_metric == config.optuna_objective_metric
+    assert buy_cfg.classification_threshold == config.eval_classification_threshold
+
+    assert sell_cfg.max_depth == config.xgb_max_depth
+    assert sell_cfg.classification_threshold == config.eval_classification_threshold
+
+    # 2. Overrides for BUY only
+    monkeypatch.setenv("XGB_BUY_MAX_DEPTH", "6")
+    monkeypatch.setenv("XGB_BUY_ETA", "0.03")
+    monkeypatch.setenv("XGB_BUY_ALPHA", "0.1")
+    monkeypatch.setenv("OPTUNA_BUY_TRIALS", "45")
+    monkeypatch.setenv("OPTUNA_BUY_OBJECTIVE_METRIC", "precision")
+    monkeypatch.setenv("EVAL_BUY_CLASSIFICATION_THRESHOLD", "0.48")
+
+    cfg_overridden = AppConfig.from_env(load_env_file=False)
+    buy_overridden = cfg_overridden.get_directional_config("buy")
+    sell_overridden = cfg_overridden.get_directional_config("sell")
+
+    # BUY should have overridden values
+    assert buy_overridden.max_depth == 6
+    assert buy_overridden.eta == 0.03
+    assert buy_overridden.reg_alpha == 0.1
+    assert buy_overridden.optuna_trials == 45
+    assert buy_overridden.optuna_objective_metric == "precision"
+    assert buy_overridden.classification_threshold == 0.48
+    # BUY unchanged parameters should still fallback to global
+    assert buy_overridden.subsample == cfg_overridden.xgb_subsample
+
+    # SELL should remain unchanged (falling back to global)
+    assert sell_overridden.max_depth == cfg_overridden.xgb_max_depth
+    assert sell_overridden.eta == cfg_overridden.xgb_eta
+    assert sell_overridden.classification_threshold == cfg_overridden.eval_classification_threshold
+
+    # 3. Invalid direction error
+    with pytest.raises(ValueError, match="Invalid direction 'hold'"):
+        config.get_directional_config("hold")
 
 
 def test_env_and_example_parity_and_no_liveonnx_only_keys():
